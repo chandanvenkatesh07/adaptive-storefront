@@ -10,9 +10,10 @@ choices look arbitrary until you know the reasoning.
 ## 1. What this is
 
 An **adaptive storefront**: one product catalog, but the page assembles itself
-differently per shopper based on inferred intent. It is a demo of **intent-driven,
-server-driven UI** for commerce — the project's thesis is that this is a *control*
-problem, not a *generation* problem.
+differently per shopper based on inferred intent. The demo is branded **BuildRight**
+(home-improvement, HD-scale UX). The thesis: adaptive layout is a *control* problem,
+not a *generation* problem — the LLM decides block selection; grounded catalog data
+renders truth.
 
 The headline mental model:
 
@@ -37,9 +38,9 @@ renders truth and never invents products. Everything interesting is in the layer
    schema AND the renderer switch AND the prompt. All three, or it breaks.
 3. **Never crash the page.** Every failure path (schema invalid, network down, no
    API key, parse error) falls back to a grounded cached spec. See the render route.
-4. **The intent is legible.** The inferred intent is shown to the user in the Intent
-   Readout panel — this is the product's differentiator vs. a black-box recommender.
-   Keep it honest and visible. Do not hide inference.
+4. **The intent is legible.** Signal evidence is shown in an EvidenceBar on every
+   persona-driven page. This is the product's differentiator vs. a black-box
+   recommender. Keep it honest and visible. Do not hide inference.
 
 If you find yourself wanting to relax #1 or #2 to make something easier, stop —
 those constraints *are* the product.
@@ -48,109 +49,146 @@ those constraints *are* the product.
 
 ## 3. Architecture & file map
 
+### Core (pre-existing, do not break)
+
 | File | Layer | Responsibility |
 |---|---|---|
-| `lib/catalog.ts` | source of truth | The 32 products. The ONLY place products/prices/stock exist. `tags` are the join key to signals (see §6). |
-| `lib/schema.ts` | contract + grounding | Zod `PageSpecSchema`; the `ground()` step that drops invented ids and empty blocks. |
-| `lib/prompt.ts` | decisioning | System prompt that turns shopper input → block selection. Encodes the repair-vs-gift layout rules. |
-| `lib/fallback.ts` | safety net + scenarios | Hand-verified cached `PRESETS` (4 scenarios). Used as graceful fallback AND as the labeled demo buttons. |
-| `app/api/render/route.ts` | orchestration | Server-side model call (key stays server-side). Accepts `{input, presetKey}`. Falls back to the exact preset spec on any failure. |
-| `components/Renderer.tsx` | render seam | The `switch` over block types → real React. Deterministic. Binds ids → catalog. |
-| `components/IntentReadout.tsx` | the signature | Renders inferred intent as a gauge-style readout. |
-| `app/page.tsx` | client | Scenario buttons + free-text input. **All paths are live** (model generates fresh each load). Deep-link `?case=KEY` pre-loads a scenario. |
-| `app/globals.css` | styling | Industrial workshop design system. Tokens at `:root`. |
+| `lib/catalog.ts` | source of truth | 32 products. The ONLY place products/prices/stock exist. `tags` are the join key to signals. |
+| `lib/schema.ts` | contract + grounding | Zod `PageSpecSchema`; `ground()` drops invented ids and empty blocks. |
+| `lib/prompt.ts` | decisioning | System prompt: shopper input → block selection. Encodes repair-vs-gift layout rules. |
+| `lib/fallback.ts` | safety net + scenarios | 4 hand-verified PRESETS (repair, gift, budget, starter). Used as fallback AND demo content in M1. |
+| `app/api/render/route.ts` | orchestration | Server-side model call. Accepts `{input, presetKey}`. Falls back to preset spec on any failure. |
+| `components/Renderer.tsx` | render seam (legacy) | Switch over block types → React. Still in codebase; not used by new UI (M1+ uses inline section components). |
 
-Stack: Next.js 14 App Router · TypeScript · Zod · no DB · deploys to Vercel.
-Model call: Anthropic `claude-sonnet-4-6` via raw fetch (no SDK dependency).
+### Added in signal-driven personas phase
+
+| File | Responsibility |
+|---|---|
+| `lib/personas.ts` | 4 PERSONAS with typed signal bundles (type, value, tags, recency, confidence, consumable?). |
+| `lib/signals.ts` | `inferFromSignals()`: weights signals, detects conflicts, emits EvidenceTrace with per-item outcome. |
+
+### Added in Milestone 1 (Foundation Shell)
+
+| File | Responsibility |
+|---|---|
+| `tailwind.config.ts` | Design tokens: brand orange, ink, concrete, card, steel, line. Fonts: Archivo/Inter/IBM Plex Mono. |
+| `postcss.config.mjs` | Tailwind + autoprefixer. |
+| `app/globals.css` | Tailwind base/components/utilities. Body: bg-concrete text-ink. |
+| `lib/cart.tsx` | CartContext: items, addItem (auto-opens drawer), removeItem, updateQty, clearCart, total, count, open/setOpen. |
+| `lib/persona-context.tsx` | PersonaContext: persona, evidence, setActive(p, e), clear(). Single source of truth for active persona. |
+| `components/Header.tsx` | Sticky bg-ink header. Logo, search, "Sign in as" persona dropdown, cart badge. Placeholder adapts to persona. |
+| `components/CategoryNav.tsx` | White border-b nav, 10 categories. Reorders by tag-intersection score when persona active. |
+| `components/CartDrawer.tsx` | Fixed right panel, item list, +/- qty, subtotal, Checkout. |
+| `components/ProductCard.tsx` | Product tile: category abbr placeholder, name/brand/price, orange Add to Cart, links to /product/[id]. |
+| `app/layout.tsx` | Server component. PersonaProvider > CartProvider > Header > CategoryNav > main > CartDrawer. Google Fonts. |
+| `app/page.tsx` | Client. Watches persona context. Maps persona.id → PRESET key → renders EvidenceBar + PersonaContent. Default: hero + best-sellers. |
+| `app/product/[id]/page.tsx` | Server component. generateStaticParams() → 32 pre-rendered routes. Breadcrumb, details, related products. |
+| `app/product/[id]/AddToCartButton.tsx` | Client. useCart().addItem(product). |
 
 ---
 
-## 4. Current state (what's done vs. mocked vs. next)
+## 4. Current milestone state
 
-**Done & working:**
-- Full render pipeline: input → intent+layout decision → grounded spec → React.
-- 4 scenarios (repair, gift-for-dad, starter toolkit, budget gift) as buttons.
-- 32-item catalog across plumbing, tools, power tools, outdoor/garden, lighting,
-  smart home, paint, workwear (see §6 for the cluster logic).
-- Live generation with graceful fallback to cached specs (works with no API key).
-- Deep-linkable scenarios.
+### Milestone 1 — COMPLETE (Foundation Shell)
 
-**Mocked (be honest about this in any demo/post):**
-- No real signals. "Intent" currently comes from a typed/clicked input string.
+Build passes. All 32 product pages statically generated. The full site shell works:
+- Persona selection via "Sign in as" dropdown → page rebuilds from PRESET spec.
+- EvidenceBar shows signal chips (fired/suppressed/overridden) + conflict note.
+- CategoryNav reorders by persona signal tags.
+- Cart drawer with quantity controls, auto-opens on add.
+- Product detail pages server-rendered with related products.
+- **Limitation:** M1 uses PRESETS synchronously. No AI streaming yet.
 
-**Next planned feature (NOT yet built) — signal-driven personas:**
-This is the active design direction. See §5.
+### Milestone 2 — NEXT (Streaming GenUI)
+
+**Goal:** Replace PRESET lookup with a live streaming model call. Page content appears
+block-by-block as the model streams tool calls.
+
+**Implementation plan:**
+1. `npm install ai@3 @ai-sdk/anthropic`
+2. Create `app/actions.tsx` — server action using `createStreamableUI` + `streamText` with tool calls.
+3. Tools the model can call:
+   - `renderHero(headline, sub, mode)` → `<HeroBanner />` streamed to client
+   - `renderProducts(title, productIds)` → `<ProductGridSection />` streamed
+   - `renderGuide(title, steps)` → `<GuideSection />` streamed
+   - `renderGiftCollection(title, productIds)` → gift-styled grid streamed
+4. Server action pattern:
+   ```typescript
+   'use server';
+   import { createStreamableUI } from 'ai/rsc';
+   import { streamText } from 'ai';
+   export async function renderPage(input: string) {
+     const ui = createStreamableUI(<LoadingSkeleton />);
+     (async () => {
+       const { fullStream } = streamText({ model, system, prompt: input, tools });
+       for await (const chunk of fullStream) {
+         if (chunk.type === 'tool-result') ui.update(<CurrentLayout />);
+       }
+       ui.done();
+     })();
+     return { ui: ui.value };
+   }
+   ```
+5. In `app/page.tsx`: on persona change, call `renderPage(inferredDescription)`, store `result.ui` in state, render it.
+6. The section components (HeroBanner, ProductGridSection, GuideSection) should be extracted to separate files for RSC compatibility.
+
+**Grounding still applies in M2.** Tool call args go through `ground()` before rendering. The model passes product ids; the tool implementation resolves them from catalog.
+
+### Milestone 3 — Full Product + Cart (planned)
+
+- `/cart` route — dedicated cart page with order summary.
+- Persona-aware related products on product detail page (use signal tags, not just category tags).
+- Quantity selector on product page before add-to-cart.
+
+### Milestone 4 — AGENT.md + final review.md (planned)
+
+- Update this file with complete M2/M3 architecture.
+- Write final `review.md` covering the full implementation.
 
 ---
 
-## 5. NEXT FEATURE: signal-driven, zero-input personalization
+## 5. Persona + signal system
 
-**Goal:** the site is dynamic *on landing* — the user types nothing. Assuming a
-logged-in `userID`, the system assembles an intent from signals it already holds and
-renders immediately. This is the realistic model and a stronger demo than "type your
-intent."
+### The 4 personas (each stresses a different inference case)
 
-**Demo mechanism:** 4 user cards at the top. Clicking one *assumes that persona's
-signal bundle* and re-renders as if they just landed logged in. Same 32-item catalog
-under all four.
+1. **Mid-Repair Homeowner** (`mid_repair`) — strong convergent signal (searches "faucet cartridge", abandoned plumbing cart). Easy case; should look effortless. → repair layout.
+2. **Gift Shopper** (`gift_conflict`) — fresh search "Father's Day gift" vs. purchase history of heavy pro-tool buys. **Conflict case.** Fresh explicit search beats stale history → gift layout, but EvidenceBar must SHOW the override.
+3. **Nudged Browser** (`nudged_browser`) — no searches; only soft signals (outdoor email click, patio ad, bought a grill last summer). **Weak-signal case.** → outdoor/seasonal at lower confidence.
+4. **Blank Slate** (`blank_slate`) — no history. **Cold-start case.** → best-sellers default.
 
-**Signal taxonomy** (each signal has *recency* and *confidence*; they are NOT a
-priority list — they cast recency- and confidence-weighted votes toward an intent):
+### Signal weighting (lib/signals.ts)
 
-| Signal | Confidence | Notes |
-|---|---|---|
-| Recent search queries | highest | explicit, fresh. Decays fast. |
-| Purchase history | high but *directional* | **consumables complement** (invite more), **durables suppress** (done for now). This is the subtle one. |
-| Prior-session intent | medium, decays | carryover (e.g. abandoned cart). |
-| Email link clicks | medium | marketing-nudged, trust less than self-initiated search. |
-| Ad-click signals | lowest | externally planted. Tiebreaker, not driver. |
+```
+TYPE_BASE: search=1.0, cart_abandon=0.85, purchase=0.75, email_click=0.5, ad_click=0.3
+effectiveWeight = TYPE_BASE[type] × recency × confidence
+```
 
-**The 4 personas** (each stresses a different part of the logic — keep this property
-if you edit them):
+Conflict detection: if `searchWeight > durableWeight × 2`, fresh search wins; durable outcome → "overridden".
 
-1. **Mid-Repair Homeowner** — strong convergent signal (searches "faucet cartridge",
-   abandoned plumbing cart). The easy case; should look effortless. → repair layout.
-2. **Gift Shopper w/ Conflicting Past** — fresh search "Father's Day gift" vs. purchase
-   history of heavy pro-tool buys. **Conflict case.** Fresh explicit search should beat
-   stale history → gift layout, but the readout must SHOW the tension/override.
-3. **Nudged Browser** — no searches; only soft signals (clicked spring-outdoor email,
-   patio ad, bought a grill last summer). **Weak-signal case.** → outdoor/seasonal,
-   shown at lower confidence. Tests graceful degradation + honesty about uncertainty.
-4. **Blank Slate** — new userID, no history. **Cold-start case.** → best-sellers
-   default. Proves the design handles the hard reality, not just data-rich users.
+Confidence thresholds: totalPositiveWeight > 1.5 → "high", > 0.6 → "medium", > 0 → "low", else "none".
 
-**Implementation sketch (proposed, not final):**
-- Add `lib/personas.ts`: 4 hand-authored signal bundles (mocked fixtures — there is
-  NO real ad pixel / email tracking / purchase DB, and the demo should say so).
-- Add a signal→intent inference function: map signals to catalog `tags`, apply
-  recency/confidence weights, resolve conflicts, emit an `Intent` + an *evidence*
-  trace (which signals fired, how weighted, what was overridden/down-weighted).
-- Extend `IntentReadout` to show the evidence trace, not just the final intent. With
-  multi-signal inference this panel becomes load-bearing, not decorative.
-- The inferred intent then feeds the SAME existing decision→ground→render pipeline.
-  Do not rebuild the pipeline; just change where intent comes from.
+### M1 persona → preset mapping (replaced by streaming in M2)
 
-**Open questions left for the human (ask before assuming):**
-- Persona 3's soft-signal category (currently outdoor/seasonal) — confirm.
-- Persona 2's conflict rule (currently: fresh search beats stale history) — confirm.
+```typescript
+const PERSONA_PRESET: Record<string, keyof typeof PRESETS> = {
+  mid_repair:     'repair',
+  gift_conflict:  'gift',
+  nudged_browser: 'budget',
+  blank_slate:    'starter',
+};
+```
 
 ---
 
 ## 6. Conventions you must respect
 
-- **Tags are the signal interface.** Each product's `tags` are how signals join to
-  inventory. A search for "drain clog" → tags `plumbing,repair`; a patio ad →
-  `outdoor,patio`. When adding products, tag them so signals can find them.
-- **Consumable vs. durable is intentional.** Items tagged `consumable` (soil, bulbs,
-  saw blades, drill bits, aerator) *complement* purchases and recur. Durables
-  (grill, bistro set, thermostat, ladder) *suppress* their category after purchase.
-  The signal-weighting logic depends on this distinction — preserve it.
-- **Catalog clusters** (added deliberately, each feeds a persona):
-  outdoor/garden → Persona 3 · power-tool accessories → purchase-complement logic ·
-  plumbing depth → Persona 1 · best-sellers → Persona 4 cold start.
+- **Tags are the signal interface.** Product `tags` are how signals join to inventory. A search for "drain clog" → tags `plumbing,repair`. When adding products, tag them so signals can find them.
+- **Consumable vs. durable matters.** Consumables (soil, bulbs, saw blades) complement purchases and recur. Durables (grill, thermostat, ladder) suppress their category after purchase. The signal-weighting logic depends on `consumable` field.
+- **No emoji in code or UI.** System rule — enforced globally.
+- **No Claude co-author in git commits.** User preference — commits are under user's name only.
 - **Adding a block type** = schema + renderer switch + prompt rules, all three.
-- **Copy style:** plain, active voice, end-user framing (see the design skill ethos).
-  Name things by what the user does, not how the system works.
+- **Copy style:** plain, active voice, end-user framing. Name things by what the user does, not how the system works.
+- **No comments that explain WHAT code does.** Only add a comment when the WHY is non-obvious.
 
 ---
 
@@ -162,32 +200,25 @@ npm run dev          # http://localhost:3000
 npm run build        # type-checks + builds; must pass before pushing
 ```
 
-- **No API key** → serves grounded cached specs (static but correct). Good for a
-  free public deploy.
-- **With key** → set `ANTHROPIC_API_KEY` in `.env.local` (dev) or Vercel env (prod)
-  for live generation. NOTE: with a key on a public URL, every visitor click costs
-  tokens. For a public demo, prefer key-off and show live variation in a recording.
+- **No API key** → serves grounded cached PRESET specs. Good for a free public deploy.
+- **With key** → set `ANTHROPIC_API_KEY` in `.env.local` (dev) or Vercel env (prod).
 
 Deploy: push to GitHub → import on Vercel → (optional) add env var → deploy.
+
+Stack: Next.js 14 App Router · TypeScript · Tailwind CSS v3 · Zod · no DB.
+Model: Anthropic `claude-sonnet-4-6` (M2 will use `@ai-sdk/anthropic` + `ai@3`).
 
 ---
 
 ## 8. Gotchas
 
-- The Google Fonts `<link>` in `app/layout.tsx` triggers a harmless CSS-minify
-  warning in sandboxed/offline builds. It resolves fine on Vercel. Don't "fix" it by
-  removing the fonts.
-- The model sometimes wraps JSON in prose/backticks; the route already slices between
-  the first `{` and last `}` before parsing. Keep that tolerance.
-- `max_tokens` is set modestly; if you add many block types, a complex page may need
-  a higher cap.
+- The Google Fonts `<link>` in `app/layout.tsx` triggers a harmless CSS-minify warning in sandboxed/offline builds. Do not "fix" it by removing the fonts.
+- The model sometimes wraps JSON in prose/backticks; `app/api/render/route.ts` already slices between the first `{` and last `}` before parsing. Keep that tolerance.
+- Playwright is installed globally via homebrew at `/opt/homebrew/lib/node_modules/playwright`, not in project node_modules. If scripting browser tests, require from that path.
+- `max_tokens` is set modestly in the render route; if you add many block types, a complex page may need a higher cap.
 
 ---
 
-## 9. Explicit non-goals (don't "helpfully" build these without being asked)
+## 9. Explicit non-goals (don't build without being asked)
 
-Per-user real-time render on every pageview (cache by intent *cluster* instead),
-real signal integrations (CDP/event stream/ad pixel), the live mid-session intent
-*switch detector* (designed but deferred), A/B eval infra, real auth, real inventory
-APIs. These are the "what productionizing adds" story — name them, don't smuggle them
-into the demo.
+Per-user real-time render on every pageview (cache by intent cluster instead), real signal integrations (CDP/event stream/ad pixel), the live mid-session intent switch detector (designed but deferred), A/B eval infra, real auth, real inventory APIs. These are the "what productionizing adds" story — name them, don't smuggle them into the demo.

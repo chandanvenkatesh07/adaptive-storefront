@@ -1,178 +1,227 @@
-"use client";
-import { useState, useEffect, useCallback } from "react";
-import { RenderPage } from "@/components/Renderer";
-import { IntentReadout } from "@/components/IntentReadout";
-import { PRESETS } from "@/lib/fallback";
-import { PERSONAS } from "@/lib/personas";
-import { inferFromSignals } from "@/lib/signals";
-import type { EvidenceTrace } from "@/lib/signals";
-import type { PageSpec } from "@/lib/schema";
+'use client';
+import { useEffect, useState } from 'react';
+import { usePersona } from '@/lib/persona-context';
+import { ProductCard } from '@/components/ProductCard';
+import { CATALOG, byId } from '@/lib/catalog';
+import { PRESETS } from '@/lib/fallback';
+import type { PageSpec } from '@/lib/schema';
+import type { Persona } from '@/lib/personas';
+import type { EvidenceTrace } from '@/lib/signals';
 
-type Result = { spec: PageSpec; source: string; evidence?: EvidenceTrace };
-
-const SIGNAL_TYPE_CLASS: Record<string, string> = {
-  search:       "chip chip-search",
-  purchase:     "chip chip-purchase",
-  cart_abandon: "chip chip-cart_abandon",
-  email_click:  "chip chip-email_click",
-  ad_click:     "chip chip-ad_click",
+// ─── Persona → preset mapping for Milestone 1 (streaming replaces this in M2) ─
+const PERSONA_PRESET: Record<string, keyof typeof PRESETS> = {
+  mid_repair:     'repair',
+  gift_conflict:  'gift',
+  nudged_browser: 'budget',
+  blank_slate:    'starter',
 };
 
+// ─── Section components ────────────────────────────────────────────────────────
 
-export default function Home() {
-  const [result, setResult] = useState<Result | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [custom, setCustom] = useState("");
-  const [active, setActive] = useState<string>("");
-
-  const render = useCallback(async (input: string, presetKey?: string, evidence?: EvidenceTrace) => {
-    setLoading(true);
-    setActive(presetKey || "custom");
-    if (presetKey) setCustom("");
-    if (presetKey && typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-      url.searchParams.set("case", presetKey);
-      window.history.replaceState({}, "", url);
-    }
-    try {
-      const res = await fetch("/api/render", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ input, presetKey }),
-      });
-      const data = await res.json();
-      setResult({ spec: data.spec, source: data.source, evidence });
-    } catch {
-      const fb = presetKey && PRESETS[presetKey] ? PRESETS[presetKey].spec : PRESETS.repair.spec;
-      setResult({ spec: fb, source: "fallback", evidence });
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const handlePersona = useCallback((personaId: string) => {
-    const persona = PERSONAS.find((p) => p.id === personaId);
-    if (!persona) return;
-    const { description, evidence } = inferFromSignals(persona.signals);
-    setActive(`persona_${personaId}`);
-    render(description, undefined, evidence);
-  }, [render]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const key = new URL(window.location.href).searchParams.get("case");
-    if (key && PRESETS[key]) render(PRESETS[key].input, key);
-  }, [render]);
-
+function HeroBanner({ headline, sub, cta, mode }: {
+  headline: string; sub: string; cta: string; mode: string;
+}) {
   return (
-    <main>
-      <header className="top">
-        <div className="brand-mark">
-          <span className="logo">▣</span>
-          <span>ADAPTIVE&nbsp;STOREFRONT</span>
-        </div>
-        <div className="tag">one catalog · the layout changes with intent</div>
-      </header>
-
-      <section className="intro">
-        <h1>
-          The same store,<br />
-          <span className="accent">rebuilt around what you came to do.</span>
-        </h1>
-        <p>
-          Click a shopper persona below — the page assembles itself from their signals, with no
-          input typed. Or pick a typed scenario, or describe your own. Every path hits the{" "}
-          <em>same</em> 32-item catalog; the model selects and orders blocks, never invents a product.
+    <section className={`rounded-xl px-8 py-12 ${
+      mode === 'gift'
+        ? 'bg-gradient-to-br from-brand to-brand-dark'
+        : 'bg-ink'
+    }`}>
+      <div className="max-w-xl">
+        <p className="font-mono text-xs uppercase tracking-widest mb-3 text-white/50">
+          {mode === 'repair' ? 'Repair Guide' : mode === 'gift' ? 'Gift Shop' : 'Featured'}
         </p>
-      </section>
-
-      {/* Persona cards — zero-input personalization */}
-      <div className="persona-section">
-        <div className="persona-section-label">SIGNAL-DRIVEN PERSONAS — land as if you just signed in</div>
-        <div className="personas">
-          {PERSONAS.map((persona) => (
-            <button
-              key={persona.id}
-              className={`persona ${active === `persona_${persona.id}` ? "on" : ""}`}
-              onClick={() => handlePersona(persona.id)}
-              disabled={loading}
-            >
-              <div className="persona-name">{persona.name}</div>
-              <div className="persona-role">{persona.role}</div>
-              {persona.signals.length > 0 ? (
-                <div className="persona-chips">
-                  {persona.signals.map((s, i) => (
-                    <span key={i} className={SIGNAL_TYPE_CLASS[s.type]}>
-                      {s.value}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <div className="persona-chips">
-                  <span className="chip chip-none">no signals</span>
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Existing typed scenarios */}
-      <div className="section-divider">
-        <span>or try a typed scenario</span>
-      </div>
-
-      <div className="controls">
-        {Object.entries(PRESETS).map(([key, p]) => (
-          <button
-            key={key}
-            className={`preset ${active === key ? "on" : ""}`}
-            onClick={() => render(p.input, key)}
-            disabled={loading}
-          >
-            <span className="preset-label">{p.label}</span>
-            <span className="preset-input">"{p.input}"</span>
-          </button>
-        ))}
-      </div>
-
-      <div className="custom-row">
-        <input
-          value={custom}
-          onChange={(e) => setCustom(e.target.value)}
-          placeholder="…or describe your own shopper — e.g. 'building a raised garden bed'"
-          onKeyDown={(e) => e.key === "Enter" && custom.trim() && render(custom)}
-          disabled={loading}
-        />
-        <button
-          className="go"
-          disabled={loading || !custom.trim()}
-          onClick={() => custom.trim() && render(custom)}
-        >
-          {loading ? "Generating…" : "Generate"}
+        <h1 className="font-display font-black text-3xl md:text-4xl text-white leading-tight mb-4">
+          {headline}
+        </h1>
+        <p className="text-white/75 text-base mb-6 leading-relaxed">{sub}</p>
+        <button className="bg-white text-ink font-display font-black px-6 py-3 rounded-lg hover:bg-concrete transition-colors text-sm">
+          {cta}
         </button>
       </div>
+    </section>
+  );
+}
 
-      {loading && <div className="skeleton">Assembling the page for this intent…</div>}
+function ProductGridSection({ title, products }: {
+  title: string; products: ReturnType<typeof byId>[];
+}) {
+  const real = products.filter(Boolean) as NonNullable<ReturnType<typeof byId>>[];
+  if (real.length === 0) return null;
+  return (
+    <section>
+      <h2 className="font-display font-black text-xl text-ink mb-4 pb-3 border-b-2 border-brand">
+        {title}
+      </h2>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        {real.map(p => <ProductCard key={p.id} product={p} />)}
+      </div>
+    </section>
+  );
+}
 
-      {result && !loading && (
-        <div className="result">
-          <IntentReadout intent={result.spec.intent} source={result.source} evidence={result.evidence} />
-          <RenderPage spec={result.spec} />
-        </div>
-      )}
+function GuideSection({ title, steps }: { title: string; steps: string[] }) {
+  return (
+    <section className="bg-ink rounded-xl px-8 py-8">
+      <h2 className="font-display font-black text-xl text-white mb-6">{title}</h2>
+      <ol className="space-y-4">
+        {steps.map((step, i) => (
+          <li key={i} className="flex gap-4 items-start">
+            <span className="font-mono text-brand font-bold text-sm min-w-[28px]">
+              {String(i + 1).padStart(2, '0')}
+            </span>
+            <span className="text-white/80 text-sm leading-relaxed">{step}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
 
-      {!result && !loading && (
-        <div className="empty">Click a persona or choose a scenario to see the storefront assemble itself.</div>
-      )}
+function EvidenceBar({ persona, evidence }: { persona: Persona; evidence: EvidenceTrace }) {
+  const confidenceColor = {
+    high: 'text-brand',
+    medium: 'text-steel',
+    low: 'text-steel-2',
+    none: 'text-steel-2',
+  }[evidence.confidence];
 
-      <footer className="foot">
-        Generated live each time, grounded in 32 real products · personas infer intent from mocked signals ·
-        binds only to real catalog items ·{" "}
-        <span className="src-note">
-          badge: "live" = model-generated this load, "fallback" = safety net when the model is unavailable
+  return (
+    <div className="bg-ink rounded-lg px-5 py-3 flex flex-wrap items-center gap-3">
+      <div className="flex items-center gap-2">
+        <span className="w-2 h-2 rounded-full bg-brand shadow-[0_0_6px_#E8552D]" />
+        <span className="font-mono text-xs text-white/50 uppercase tracking-widest">
+          Signal Evidence
         </span>
+        <span className={`font-mono text-xs font-bold uppercase tracking-widest ${confidenceColor}`}>
+          {evidence.confidence}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {evidence.items.map((item, i) => (
+          <span
+            key={i}
+            className={`font-mono text-xs px-2 py-0.5 rounded ${
+              item.outcome === 'fired'      ? 'bg-brand/20 text-brand'
+              : item.outcome === 'suppressed' ? 'bg-white/10 text-white/40 line-through'
+              : 'bg-white/5 text-white/30 line-through'
+            }`}
+          >
+            {item.label}
+          </span>
+        ))}
+        {evidence.items.length === 0 && (
+          <span className="font-mono text-xs text-white/30">No signals — showing defaults</span>
+        )}
+      </div>
+      {evidence.conflictNote && (
+        <p className="w-full font-mono text-xs text-brand/80 border-l-2 border-brand pl-3 mt-1">
+          {evidence.conflictNote}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function PersonaContent({ spec }: { spec: PageSpec }) {
+  return (
+    <div className="space-y-10">
+      {spec.blocks.map((block, i) => {
+        switch (block.type) {
+          case 'hero':
+            return (
+              <HeroBanner
+                key={i}
+                headline={block.headline}
+                sub={block.sub}
+                cta="Shop Now"
+                mode={spec.intent.mode}
+              />
+            );
+          case 'productGrid':
+          case 'giftCollection':
+            return (
+              <ProductGridSection
+                key={i}
+                title={block.title}
+                products={(block.productIds ?? []).map(id => byId(id))}
+              />
+            );
+          case 'guide':
+            return <GuideSection key={i} title={block.title} steps={block.steps} />;
+          default:
+            return null;
+        }
+      })}
+    </div>
+  );
+}
+
+// Best-sellers shown when no persona is active
+const BEST_SELLER_IDS = [
+  'sku_led_bulbs', 'sku_thermostat', 'sku_step_ladder', 'sku_paint_kit',
+  'sku_multitool', 'sku_drill_combo', 'sku_headlamp', 'sku_workgloves',
+];
+
+function DefaultHome() {
+  const bestSellers = BEST_SELLER_IDS.map(id => byId(id)).filter(Boolean) as NonNullable<ReturnType<typeof byId>>[];
+
+  return (
+    <div className="space-y-10">
+      {/* Hero */}
+      <section className="rounded-xl bg-ink px-8 py-14">
+        <div className="max-w-xl">
+          <p className="font-mono text-xs uppercase tracking-widest text-white/40 mb-3">
+            Adaptive Storefront
+          </p>
+          <h1 className="font-display font-black text-4xl text-white leading-tight mb-4">
+            The same store,<br />
+            <span className="text-brand">built around what you came to do.</span>
+          </h1>
+          <p className="text-white/60 text-base mb-6 leading-relaxed">
+            Click <strong className="text-white">"Sign in as"</strong> above to pick a shopper persona
+            — the page rebuilds itself from your signals. Every path uses the same 32-item catalog.
+          </p>
+          <button className="bg-brand hover:bg-brand-dark text-white font-display font-black px-6 py-3 rounded-lg transition-colors text-sm">
+            Browse All Products
+          </button>
+        </div>
+      </section>
+
+      {/* Best sellers */}
+      <ProductGridSection title="Popular this week" products={bestSellers} />
+    </div>
+  );
+}
+
+// ─── Page ────────────────────────────────────────────────────────────────────
+
+export default function HomePage() {
+  const { persona, evidence } = usePersona();
+  const [spec, setSpec] = useState<PageSpec | null>(null);
+
+  // Reset spec when persona changes
+  useEffect(() => {
+    if (!persona) { setSpec(null); return; }
+    const key = PERSONA_PRESET[persona.id] ?? 'repair';
+    setSpec(PRESETS[key].spec);
+  }, [persona?.id]);
+
+  return (
+    <div className="min-h-screen bg-concrete">
+      <div className="max-w-8xl mx-auto px-4 py-8 space-y-8">
+        {persona && evidence && (
+          <EvidenceBar persona={persona} evidence={evidence} />
+        )}
+        {spec ? <PersonaContent spec={spec} /> : <DefaultHome />}
+      </div>
+
+      <footer className="max-w-8xl mx-auto px-4 py-8 mt-8 border-t border-line">
+        <p className="font-mono text-xs text-steel-2 leading-relaxed">
+          BuildRight Adaptive Storefront · 32 real products · layout driven by shopper signals ·
+          Milestone 1 of 4 (foundation shell — streaming GenUI comes in M2)
+        </p>
       </footer>
-    </main>
+    </div>
   );
 }

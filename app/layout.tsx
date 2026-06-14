@@ -1,9 +1,14 @@
-import type { Metadata } from "next";
-import "./globals.css";
+import type { Metadata } from 'next';
+import './globals.css';
+import { CartProvider } from '@/lib/cart';
+import { PersonaProvider } from '@/lib/persona-context';
+import { Header } from '@/components/Header';
+import { CategoryNav } from '@/components/CategoryNav';
+import { CartDrawer } from '@/components/CartDrawer';
 
 export const metadata: Metadata = {
-  title: "Adaptive Storefront — one catalog, intent-driven layout",
-  description: "A storefront that reassembles per shopper intent. AI proposes the layout; the catalog is the source of truth.",
+  title: 'BuildRight — Adaptive Home Improvement',
+  description: 'One catalog. The storefront rebuilds around what you came to do.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -13,11 +18,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;800&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap"
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <PersonaProvider>
+          <CartProvider>
+            <Header />
+            <CategoryNav />
+            <main>{children}</main>
+            <CartDrawer />
+          </CartProvider>
+        </PersonaProvider>
+      </body>
     </html>
   );
 }
