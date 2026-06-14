@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { byId, CATALOG } from '@/lib/catalog';
 import { AddToCartButton } from './AddToCartButton';
+import { RelatedProducts } from './RelatedProducts';
 
 export function generateStaticParams() {
   return CATALOG.map(p => ({ id: p.id }));
@@ -11,9 +12,11 @@ export default function ProductPage({ params }: { params: { id: string } }) {
   const product = byId(params.id);
   if (!product) notFound();
 
-  const related = CATALOG
+  // Expanded pool: all tag-matched products (up to 8).
+  // RelatedProducts client component re-ranks by persona signal tags at runtime.
+  const candidates = CATALOG
     .filter(p => p.id !== product.id && p.tags.some(t => product.tags.includes(t)))
-    .slice(0, 4);
+    .slice(0, 8);
 
   return (
     <div className="min-h-screen bg-concrete">
@@ -30,7 +33,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
 
         {/* Product main */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10 bg-white rounded-xl border border-line p-8">
-          {/* Image */}
+          {/* Image placeholder */}
           <div className="flex items-center justify-center h-72 bg-card rounded-lg border border-line">
             <div className="text-center">
               <div className="w-24 h-24 bg-concrete-2 rounded-full mx-auto flex items-center justify-center mb-3">
@@ -83,32 +86,8 @@ export default function ProductPage({ params }: { params: { id: string } }) {
           </div>
         </div>
 
-        {/* Related products */}
-        {related.length > 0 && (
-          <div className="mt-10">
-            <h2 className="font-display font-black text-xl text-ink mb-4 pb-3 border-b-2 border-brand">
-              Frequently Bought Together
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {related.map(p => (
-                <Link
-                  key={p.id}
-                  href={`/product/${p.id}`}
-                  className="bg-white rounded border border-line hover:shadow-md transition-shadow p-4 block"
-                >
-                  <div className="h-20 bg-card rounded flex items-center justify-center mb-3">
-                    <span className="font-mono text-xs text-steel">
-                      {p.category.split(' ').map(w => w[0]).join('').slice(0, 3)}
-                    </span>
-                  </div>
-                  <p className="font-display font-bold text-xs text-ink leading-tight mb-1">{p.name}</p>
-                  <p className="font-mono text-xs text-steel">{p.brand}</p>
-                  <p className="font-display font-black text-sm text-ink mt-2">${p.price.toFixed(2)}</p>
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Persona-aware related products */}
+        <RelatedProducts candidates={candidates} productTags={product.tags} />
       </div>
     </div>
   );

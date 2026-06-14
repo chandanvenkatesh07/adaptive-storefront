@@ -90,9 +90,13 @@ export function CartDrawer() {
               <span className="font-display font-bold text-sm text-steel">Subtotal</span>
               <span className="font-display font-black text-xl text-ink">${total.toFixed(2)}</span>
             </div>
-            <button className="w-full bg-brand hover:bg-brand-dark text-white font-display font-bold py-3 rounded transition-colors text-sm tracking-wide">
+            <Link
+              href="/cart"
+              onClick={() => setOpen(false)}
+              className="w-full bg-brand hover:bg-brand-dark text-white font-display font-bold py-3 rounded transition-colors text-sm tracking-wide text-center block"
+            >
               Checkout
-            </button>
+            </Link>
             <button
               onClick={() => setOpen(false)}
               className="w-full border border-line hover:border-steel text-ink font-display font-bold py-2.5 rounded transition-colors text-sm"

@@ -1,62 +1,79 @@
-# Milestone 2 Review - GenUI Layout Generation
+# Milestone 3 Review — Persona-aware product detail, cart page, qty selector
 
-**Objective:** BuildRight now assembles persona-specific storefront layouts through an AI tool-call layer while preserving the core grounding rule: product truth comes only from the fixed catalog, and invented product IDs are dropped before rendering.
-
----
-
-## What Was Built
-
-- `app/actions.tsx` - Server action using `generateText` with 5 rendering tools: `renderHero`, `renderProducts`, `renderGuide`, `renderGiftCollection`, and `renderComparison`.
-- Section components extracted to `components/sections/` for shared rendering: hero, guide, product grid, comparison, and loading skeleton.
-- `app/page.tsx` now calls the server action when a persona is selected, stores generated blocks plus `fromAI` in state, and renders the result client-side.
-- Staggered section entrance animation added in `app/globals.css` for the skeleton-to-content transition.
-- EvidenceBar accepts `fromAI` and shows a small `AI` badge only when the server action returns live AI-generated blocks.
-- No API key fallback remains fully functional: without `ANTHROPIC_API_KEY`, the same UI renders grounded preset blocks matched to each persona.
-- AI-selected product IDs are filtered through `byId()` in the server action and again at render binding.
-- Post-review hardening: live tool calls are parsed in model order, deduplicated, capped to 5 rendered blocks, normalized by mode, and rejected to fallback if grounding leaves no product-bearing block.
-- Added outdoor and default presets so Nudged Browser and Blank Slate match their documented intents without an API key.
+**Overall objective:** Full e-commerce storefront (BuildRight) where shopper persona reconfigures the entire site using GenUI streaming and A2UI/MCP. 32-item catalog is fixed; layout, content, navigation order, and related-product ranking adapt per-persona.
 
 ---
 
-## What To Review
+## What was built in M3
 
-- Skeleton to content transition after choosing a persona.
-- AI badge behavior: it should appear only for live AI output, not preset fallback.
-- Block ordering per persona:
-  - Mid-Repair should lead with repair hero, guide, exact products, and optional comparison.
-  - Gift Shopper should lead with gift hero, gift collection, then comparison.
-  - Nudged Browser should lead with outdoor hero and outdoor/seasonal product grid.
-  - Blank Slate should lead with default hero and broad best-seller product grid.
-- Grounding: no invented product IDs should render. Invalid IDs are dropped before blocks reach the page.
-- Default home still shows the broad hero and "Popular this week" best-seller grid.
+### 1. Persona-aware related products (`app/product/[id]/`)
 
----
+- **`page.tsx`** — Server component now passes an expanded candidate pool (up to 8 tag-matched products, previously sliced to 4) to the new `RelatedProducts` client component. The server does no ranking.
+- **`RelatedProducts.tsx`** — Client component (`'use client'`). Reads `PersonaContext`. When a persona is active, scores each candidate by `(persona signal tags ∩ product tags) × 2 + (product-own tag overlap)`, sorts descending, shows top 4. When no persona is active, preserves the original tag-overlap order. Section label changes from "Frequently Bought Together" to "Based on your [persona name] signals" and shows a `PERSONA-RANKED` badge.
+- The ranking is client-side only (hydrates on top of the SSG page) — the 32 product pages remain statically generated with no runtime server cost.
 
-## What Is Pending
+### 2. Quantity selector on product page (`app/product/[id]/AddToCartButton.tsx`)
 
-- M3: persona-aware product detail recommendations and a dedicated cart page.
-- M4: final `AGENT.md` update and final project review.
+- Replaced single-button layout with a `−  qty  +` selector followed by the Add to Cart button.
+- Local `qty` state (default 1), resets to 1 after each add.
+- `addItem(product, qty)` passes the selected qty to cart.
+- Disabled state (out-of-stock) disables both the qty controls and the button.
 
----
+### 3. `addItem` qty support (`lib/cart.tsx`)
 
-## Build Status
+- `addItem(product: Product, qty = 1)` — optional second parameter, defaults to 1 (backward compatible with all existing callers).
+- Existing callers in `ProductCard`, `ComparisonSection`, etc. are unaffected.
 
-`npm run build` passes after the post-review hardening fix.
+### 4. Dedicated cart page (`app/cart/page.tsx`)
 
----
-
-## Post-Review Fixes
-
-- Fixed live AI over-generation risk by using a single model tool-call response and normalizing returned blocks instead of forcing multiple `generateText` steps.
-- Fixed hero-only AI success by requiring a grounded product-bearing block before returning `fromAI: true`.
-- Fixed prompt-only ordering by sorting accepted blocks into the expected order for repair, gift, outdoor, and default modes.
-- Fixed fallback persona mismatches: `nudged_browser` now maps to `outdoor`, and `blank_slate` maps to `default`.
-- Updated legacy schema/prompt/readout paths to recognize `outdoor` and `default` intent modes.
+- Route `/cart` — client component, reads `CartContext`.
+- **Items list** (left / full-width on mobile): product image placeholder, name (links to product page), brand, per-unit price, line total, qty `−/+` controls, Remove button.
+- **Order summary** (right sidebar, sticky on desktop): subtotal, free shipping (highlighted in brand orange), 8% estimated tax, bolded order total, Place Order button, "Demo store — no real order will be placed" disclaimer, free-returns and in-store-pickup trust lines.
+- **Empty state**: centered icon, headline, prompt to shop, Shop Now link to home.
+- Clear all button removes all items.
+- CartDrawer **Checkout** button now links to `/cart` (previously a non-functional button) and closes the drawer on click.
 
 ---
 
-## Screenshots
+## What to review
 
-- `screenshots/m2-default-home.png`
-- `screenshots/m2-mid-repair.png`
-- `screenshots/m2-gift-shopper.png`
+### Persona-ranked related products
+1. Select **Mid-Repair Homeowner** persona. Navigate to any plumbing product (e.g. `/product/sku_faucet_kit`). The section heading should read "Based on your mid-repair homeowner signals" with a `PERSONA-RANKED` badge. Related products should be plumbing/repair items (PTFE tape, basin wrench, silicone sealant, supply lines) ranked ahead of, say, outdoor or gift items.
+2. Select **Gift Shopper** persona. Navigate to a tool product. Related products should surface gift/dad-tagged items near the top.
+3. Clear persona. The heading should revert to "Frequently Bought Together" with no badge. Order returns to plain tag-overlap.
+
+### Qty selector
+4. On any in-stock product page, increment qty to 3, click Add to Cart. CartDrawer should show quantity 3 for that item and the correct line total ($price × 3). Qty selector resets to 1 after add.
+5. On an out-of-stock product (e.g. `/product/sku_apron`), all three controls (−, qty display, +, Add to Cart) should be disabled / opacity-40.
+
+### Cart page
+6. Add 2–3 items from different product pages. Open `/cart`. Verify: item list correct, qty controls (+/−) update line totals and subtotal live, Remove removes items, Clear all empties the cart.
+7. Subtotal × 1.08 = Order Total (free shipping). Verify arithmetic.
+8. Cart badge count in header stays in sync while on `/cart`.
+9. Empty cart state: visit `/cart` with no items — should show empty-state card, not a broken layout.
+10. CartDrawer "Checkout" button navigates to `/cart` and closes the drawer.
+
+---
+
+## What is NOT built yet (skip in review — M4 scope)
+
+- Final `AGENT.md` update for the complete M1–M3 architecture.
+- Final `review.md` covering the full project.
+- `/product/[id]` Add to Cart does not yet add persona-selected qty from the drawer (product page qty resets correctly; this is intentional).
+- No real checkout, auth, or payment integration (non-goal per AGENT.md).
+
+---
+
+## Build output
+
+```
+Route (app)                              Size     First Load JS
+┌ ○ /                                    8.77 kB         103 kB
+├ ○ /_not-found                          875 B            88 kB
+├ ƒ /api/render                          0 B                0 B
+├ ○ /cart                                2.32 kB        96.2 kB
+└ ● /product/[id]                        1.81 kB        95.7 kB
+    └ [32 paths]
+```
+
+Zero errors, zero warnings. `/cart` is static (○). All 32 product pages remain SSG (●).

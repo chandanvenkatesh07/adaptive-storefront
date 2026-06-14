@@ -6,7 +6,7 @@ export type CartItem = { product: Product; quantity: number };
 
 type CartCtx = {
   items: CartItem[];
-  addItem: (product: Product) => void;
+  addItem: (product: Product, qty?: number) => void;
   removeItem: (productId: string) => void;
   updateQty: (productId: string, qty: number) => void;
   clearCart: () => void;
@@ -22,15 +22,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [open, setOpen] = useState(false);
 
-  const addItem = useCallback((product: Product) => {
+  const addItem = useCallback((product: Product, qty = 1) => {
     setItems(prev => {
       const idx = prev.findIndex(i => i.product.id === product.id);
       if (idx >= 0) {
         const next = [...prev];
-        next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 };
+        next[idx] = { ...next[idx], quantity: next[idx].quantity + qty };
         return next;
       }
-      return [...prev, { product, quantity: 1 }];
+      return [...prev, { product, quantity: qty }];
     });
     setOpen(true);
   }, []);
