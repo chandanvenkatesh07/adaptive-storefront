@@ -107,11 +107,12 @@ block-by-block as the model streams tool calls.
 **Implementation plan:**
 1. `npm install ai@3 @ai-sdk/anthropic`
 2. Create `app/actions.tsx` — server action using `createStreamableUI` + `streamText` with tool calls.
-3. Tools the model can call:
+3. Tools the model can call (one per block type — schema must stay in sync):
    - `renderHero(headline, sub, mode)` → `<HeroBanner />` streamed to client
    - `renderProducts(title, productIds)` → `<ProductGridSection />` streamed
    - `renderGuide(title, steps)` → `<GuideSection />` streamed
    - `renderGiftCollection(title, productIds)` → gift-styled grid streamed
+   - `renderComparison(title, productIds)` → `<ComparisonSection />` streamed (2–4 cards, "Top pick" badge on first)
 4. Server action pattern:
    ```typescript
    'use server';

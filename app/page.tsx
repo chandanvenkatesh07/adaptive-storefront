@@ -1,12 +1,27 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { usePersona } from '@/lib/persona-context';
+import { useCart } from '@/lib/cart';
 import { ProductCard } from '@/components/ProductCard';
 import { CATALOG, byId } from '@/lib/catalog';
+import type { Product } from '@/lib/catalog';
 import { PRESETS } from '@/lib/fallback';
 import type { PageSpec } from '@/lib/schema';
 import type { Persona } from '@/lib/personas';
 import type { EvidenceTrace } from '@/lib/signals';
+
+function AddToCartFromSpec({ product }: { product: Product }) {
+  const { addItem } = useCart();
+  return (
+    <button
+      onClick={() => product.inStock && addItem(product)}
+      disabled={!product.inStock}
+      className="bg-brand hover:bg-brand-dark text-white font-display font-black text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+    >
+      {product.inStock ? 'Add to Cart' : 'Out of Stock'}
+    </button>
+  );
+}
 
 // ─── Persona → preset mapping for Milestone 1 (streaming replaces this in M2) ─
 const PERSONA_PRESET: Record<string, keyof typeof PRESETS> = {
@@ -74,6 +89,57 @@ function GuideSection({ title, steps }: { title: string; steps: string[] }) {
           </li>
         ))}
       </ol>
+    </section>
+  );
+}
+
+function ComparisonSection({ title, products }: {
+  title: string; products: NonNullable<ReturnType<typeof byId>>[];
+}) {
+  if (products.length === 0) return null;
+  return (
+    <section>
+      <h2 className="font-display font-black text-xl text-ink mb-4 pb-3 border-b-2 border-line">
+        {title}
+      </h2>
+      <div className={`grid gap-4 ${
+        products.length === 2 ? 'grid-cols-2' :
+        products.length === 3 ? 'grid-cols-3' :
+        'grid-cols-2 sm:grid-cols-4'
+      }`}>
+        {products.map((p, i) => (
+          <div key={p.id} className="relative bg-white rounded-xl border-2 border-line hover:border-brand transition-colors p-5 flex flex-col gap-3">
+            {i === 0 && products.length > 1 && (
+              <span className="absolute -top-3 left-4 font-mono text-xs bg-brand text-white px-2 py-0.5 rounded-sm uppercase tracking-wider">
+                Top pick
+              </span>
+            )}
+            <div className="h-24 bg-card rounded-lg flex items-center justify-center">
+              <span className="font-mono text-sm text-steel uppercase tracking-wider">
+                {p.category.split(' ').map((w: string) => w[0]).join('').slice(0, 3)}
+              </span>
+            </div>
+            <div>
+              <span className="font-mono text-xs text-steel uppercase tracking-wide">{p.category}</span>
+              <h3 className="font-display font-black text-sm text-ink leading-tight mt-0.5">{p.name}</h3>
+              <p className="text-xs text-steel mt-0.5">{p.brand}</p>
+            </div>
+            <p className="text-xs text-ink/70 leading-relaxed flex-1">{p.blurb}</p>
+            <div className="flex items-center gap-1.5">
+              <div className="flex gap-0.5">
+                {[1,2,3,4,5].map(n => (
+                  <span key={n} className={`text-xs ${n <= Math.round(p.rating) ? 'text-brand' : 'text-steel-2'}`}>★</span>
+                ))}
+              </div>
+              <span className="font-mono text-xs text-steel">{p.rating}</span>
+            </div>
+            <div className="flex items-center justify-between border-t border-line pt-3">
+              <span className="font-display font-black text-lg text-ink">${p.price.toFixed(2)}</span>
+              <AddToCartFromSpec product={p} />
+            </div>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
@@ -149,6 +215,10 @@ function PersonaContent({ spec }: { spec: PageSpec }) {
             );
           case 'guide':
             return <GuideSection key={i} title={block.title} steps={block.steps} />;
+          case 'comparison': {
+            const real = (block.productIds ?? []).map(id => byId(id)).filter(Boolean) as NonNullable<ReturnType<typeof byId>>[];
+            return <ComparisonSection key={i} title={block.title} products={real} />;
+          }
           default:
             return null;
         }
