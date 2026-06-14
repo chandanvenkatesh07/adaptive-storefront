@@ -85,6 +85,17 @@ those constraints *are* the product.
 | `app/product/[id]/page.tsx` | Server component. generateStaticParams() → 32 pre-rendered routes. Breadcrumb, details, related products. |
 | `app/product/[id]/AddToCartButton.tsx` | Client. useCart().addItem(product). |
 
+### Added in Milestone 2 (GenUI Layout Generation)
+
+| File | Responsibility |
+|---|---|
+| `app/actions.tsx` | Server action. Uses AI SDK `generateText` with 5 rendering tools to assemble grounded page blocks. Falls back to presets without `ANTHROPIC_API_KEY` or on any model/tool failure. |
+| `components/sections/HeroBanner.tsx` | Shared hero section for default, repair, gift, and outdoor modes. |
+| `components/sections/GuideSection.tsx` | Shared numbered guide section. |
+| `components/sections/ProductGridSection.tsx` | Shared grounded product grid section. |
+| `components/sections/ComparisonSection.tsx` | Shared comparison cards with catalog-bound product details. |
+| `components/sections/PageSkeleton.tsx` | Loading skeleton shown while persona layout generation is pending. |
+
 ---
 
 ## 4. Current milestone state
@@ -99,41 +110,24 @@ Build passes. All 32 product pages statically generated. The full site shell wor
 - Product detail pages server-rendered with related products.
 - **Limitation:** M1 uses PRESETS synchronously. No AI streaming yet.
 
-### Milestone 2 — NEXT (Streaming GenUI)
+### Milestone 2 — COMPLETE (GenUI Layout Generation)
 
-**Goal:** Replace PRESET lookup with a live streaming model call. Page content appears
-block-by-block as the model streams tool calls.
+The page now calls `app/actions.tsx` on persona selection. The server action uses
+AI SDK `generateText` with 5 rendering tools:
+- `renderHero(headline, sub, mode)`
+- `renderProducts(title, productIds)`
+- `renderGuide(title, steps)`
+- `renderGiftCollection(title, note, productIds)`
+- `renderComparison(title, productIds)`
 
-**Implementation plan:**
-1. `npm install ai@3 @ai-sdk/anthropic`
-2. Create `app/actions.tsx` — server action using `createStreamableUI` + `streamText` with tool calls.
-3. Tools the model can call (one per block type — schema must stay in sync):
-   - `renderHero(headline, sub, mode)` → `<HeroBanner />` streamed to client
-   - `renderProducts(title, productIds)` → `<ProductGridSection />` streamed
-   - `renderGuide(title, steps)` → `<GuideSection />` streamed
-   - `renderGiftCollection(title, productIds)` → gift-styled grid streamed
-   - `renderComparison(title, productIds)` → `<ComparisonSection />` streamed (2–4 cards, "Top pick" badge on first)
-4. Server action pattern:
-   ```typescript
-   'use server';
-   import { createStreamableUI } from 'ai/rsc';
-   import { streamText } from 'ai';
-   export async function renderPage(input: string) {
-     const ui = createStreamableUI(<LoadingSkeleton />);
-     (async () => {
-       const { fullStream } = streamText({ model, system, prompt: input, tools });
-       for await (const chunk of fullStream) {
-         if (chunk.type === 'tool-result') ui.update(<CurrentLayout />);
-       }
-       ui.done();
-     })();
-     return { ui: ui.value };
-   }
-   ```
-5. In `app/page.tsx`: on persona change, call `renderPage(inferredDescription)`, store `result.ui` in state, render it.
-6. The section components (HeroBanner, ProductGridSection, GuideSection) should be extracted to separate files for RSC compatibility.
+The action returns serializable page blocks plus `fromAI`. The client renders those
+blocks with the extracted `components/sections/` components and a staggered entrance
+animation. If there is no `ANTHROPIC_API_KEY`, or if the model/tool call fails, the
+action returns the matching preset with `fromAI: false`.
 
-**Grounding still applies in M2.** Tool call args go through `ground()` before rendering. The model passes product ids; the tool implementation resolves them from catalog.
+**Grounding still applies in M2.** Tool-call product IDs are filtered through
+`byId()` inside the server action, and product binding in `app/page.tsx` filters
+through `byId()` again before rendering. Invented IDs are dropped.
 
 ### Milestone 3 — Full Product + Cart (planned)
 
@@ -168,7 +162,7 @@ Conflict detection: if `searchWeight > durableWeight × 2`, fresh search wins; d
 
 Confidence thresholds: totalPositiveWeight > 1.5 → "high", > 0.6 → "medium", > 0 → "low", else "none".
 
-### M1 persona → preset mapping (replaced by streaming in M2)
+### Persona → preset fallback mapping
 
 ```typescript
 const PERSONA_PRESET: Record<string, keyof typeof PRESETS> = {
@@ -207,14 +201,14 @@ npm run build        # type-checks + builds; must pass before pushing
 Deploy: push to GitHub → import on Vercel → (optional) add env var → deploy.
 
 Stack: Next.js 14 App Router · TypeScript · Tailwind CSS v3 · Zod · no DB.
-Model: Anthropic `claude-sonnet-4-6` (M2 will use `@ai-sdk/anthropic` + `ai@3`).
+Model: Anthropic `claude-sonnet-4-6` through `@ai-sdk/anthropic` + AI SDK v6.
 
 ---
 
 ## 8. Gotchas
 
 - The Google Fonts `<link>` in `app/layout.tsx` triggers a harmless CSS-minify warning in sandboxed/offline builds. Do not "fix" it by removing the fonts.
-- The model sometimes wraps JSON in prose/backticks; `app/api/render/route.ts` already slices between the first `{` and last `}` before parsing. Keep that tolerance.
+- `app/api/render/route.ts` is the legacy JSON render route. The active M2 home-page path is `app/actions.tsx`.
 - Playwright is installed globally via homebrew at `/opt/homebrew/lib/node_modules/playwright`, not in project node_modules. If scripting browser tests, require from that path.
 - `max_tokens` is set modestly in the render route; if you add many block types, a complex page may need a higher cap.
 
