@@ -9,7 +9,12 @@ export const runtime = "nodejs";
 function fallbackFor(input: string) {
   const lc = input.toLowerCase();
   const looksGift = /(gift|dad|father|present|birthday|him|her|mom)/.test(lc);
-  return looksGift ? PRESETS.gift.spec : PRESETS.repair.spec;
+  const looksOutdoor = /(outdoor|patio|garden|grill|spring|seasonal)/.test(lc);
+  const looksColdStart = /(no history|no signals|cold start|new shopper)/.test(lc);
+  if (looksGift) return PRESETS.gift.spec;
+  if (looksOutdoor) return PRESETS.outdoor.spec;
+  if (looksColdStart) return PRESETS.default.spec;
+  return PRESETS.repair.spec;
 }
 
 export async function POST(req: NextRequest) {

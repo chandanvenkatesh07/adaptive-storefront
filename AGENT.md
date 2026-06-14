@@ -56,7 +56,7 @@ those constraints *are* the product.
 | `lib/catalog.ts` | source of truth | 32 products. The ONLY place products/prices/stock exist. `tags` are the join key to signals. |
 | `lib/schema.ts` | contract + grounding | Zod `PageSpecSchema`; `ground()` drops invented ids and empty blocks. |
 | `lib/prompt.ts` | decisioning | System prompt: shopper input → block selection. Encodes repair-vs-gift layout rules. |
-| `lib/fallback.ts` | safety net + scenarios | 4 hand-verified PRESETS (repair, gift, budget, starter). Used as fallback AND demo content in M1. |
+| `lib/fallback.ts` | safety net + scenarios | 6 hand-verified PRESETS (repair, gift, outdoor, default, starter, budget). Used as no-key fallback and demo content. |
 | `app/api/render/route.ts` | orchestration | Server-side model call. Accepts `{input, presetKey}`. Falls back to preset spec on any failure. |
 | `components/Renderer.tsx` | render seam (legacy) | Switch over block types → React. Still in codebase; not used by new UI (M1+ uses inline section components). |
 
@@ -81,7 +81,7 @@ those constraints *are* the product.
 | `components/CartDrawer.tsx` | Fixed right panel, item list, +/- qty, subtotal, Checkout. |
 | `components/ProductCard.tsx` | Product tile: category abbr placeholder, name/brand/price, orange Add to Cart, links to /product/[id]. |
 | `app/layout.tsx` | Server component. PersonaProvider > CartProvider > Header > CategoryNav > main > CartDrawer. Google Fonts. |
-| `app/page.tsx` | Client. Watches persona context. Maps persona.id → PRESET key → renders EvidenceBar + PersonaContent. Default: hero + best-sellers. |
+| `app/page.tsx` | Client. Watches persona context. Maps persona.id → PRESET fallback key → calls `generatePage()`, renders EvidenceBar + generated PersonaContent. Default: hero + best-sellers. |
 | `app/product/[id]/page.tsx` | Server component. generateStaticParams() → 32 pre-rendered routes. Breadcrumb, details, related products. |
 | `app/product/[id]/AddToCartButton.tsx` | Client. useCart().addItem(product). |
 
@@ -89,7 +89,7 @@ those constraints *are* the product.
 
 | File | Responsibility |
 |---|---|
-| `app/actions.tsx` | Server action. Uses AI SDK `generateText` with 5 rendering tools to assemble grounded page blocks. Falls back to presets without `ANTHROPIC_API_KEY` or on any model/tool failure. |
+| `app/actions.tsx` | Server action. Uses AI SDK `generateText` with 5 rendering tools, parses returned tool calls, grounds product IDs, normalizes/deduplicates block order, caps output, and falls back to presets without `ANTHROPIC_API_KEY` or on invalid model output. |
 | `components/sections/HeroBanner.tsx` | Shared hero section for default, repair, gift, and outdoor modes. |
 | `components/sections/GuideSection.tsx` | Shared numbered guide section. |
 | `components/sections/ProductGridSection.tsx` | Shared grounded product grid section. |
@@ -122,12 +122,16 @@ AI SDK `generateText` with 5 rendering tools:
 
 The action returns serializable page blocks plus `fromAI`. The client renders those
 blocks with the extracted `components/sections/` components and a staggered entrance
-animation. If there is no `ANTHROPIC_API_KEY`, or if the model/tool call fails, the
+animation. If there is no `ANTHROPIC_API_KEY`, or if model output is invalid, the
 action returns the matching preset with `fromAI: false`.
 
 **Grounding still applies in M2.** Tool-call product IDs are filtered through
 `byId()` inside the server action, and product binding in `app/page.tsx` filters
-through `byId()` again before rendering. Invented IDs are dropped.
+through `byId()` again before rendering. Invented IDs are dropped. If grounding
+drops every product-bearing block, the action falls back instead of returning a
+hero-only AI page. The live AI path also normalizes block ordering by mode:
+repair = hero, guide, product grid, comparison; gift = hero, gift collection,
+comparison; outdoor/default = hero, product grid, optional comparison.
 
 ### Milestone 3 — Full Product + Cart (planned)
 
@@ -168,8 +172,8 @@ Confidence thresholds: totalPositiveWeight > 1.5 → "high", > 0.6 → "medium",
 const PERSONA_PRESET: Record<string, keyof typeof PRESETS> = {
   mid_repair:     'repair',
   gift_conflict:  'gift',
-  nudged_browser: 'budget',
-  blank_slate:    'starter',
+  nudged_browser: 'outdoor',
+  blank_slate:    'default',
 };
 ```
 

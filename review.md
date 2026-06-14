@@ -11,8 +11,10 @@
 - `app/page.tsx` now calls the server action when a persona is selected, stores generated blocks plus `fromAI` in state, and renders the result client-side.
 - Staggered section entrance animation added in `app/globals.css` for the skeleton-to-content transition.
 - EvidenceBar accepts `fromAI` and shows a small `AI` badge only when the server action returns live AI-generated blocks.
-- No API key fallback remains fully functional: without `ANTHROPIC_API_KEY`, the same UI renders grounded preset blocks.
+- No API key fallback remains fully functional: without `ANTHROPIC_API_KEY`, the same UI renders grounded preset blocks matched to each persona.
 - AI-selected product IDs are filtered through `byId()` in the server action and again at render binding.
+- Post-review hardening: live tool calls are parsed in model order, deduplicated, capped to 5 rendered blocks, normalized by mode, and rejected to fallback if grounding leaves no product-bearing block.
+- Added outdoor and default presets so Nudged Browser and Blank Slate match their documented intents without an API key.
 
 ---
 
@@ -23,6 +25,8 @@
 - Block ordering per persona:
   - Mid-Repair should lead with repair hero, guide, exact products, and optional comparison.
   - Gift Shopper should lead with gift hero, gift collection, then comparison.
+  - Nudged Browser should lead with outdoor hero and outdoor/seasonal product grid.
+  - Blank Slate should lead with default hero and broad best-seller product grid.
 - Grounding: no invented product IDs should render. Invalid IDs are dropped before blocks reach the page.
 - Default home still shows the broad hero and "Popular this week" best-seller grid.
 
@@ -37,7 +41,17 @@
 
 ## Build Status
 
-`npm run build` passes.
+`npm run build` passes after the post-review hardening fix.
+
+---
+
+## Post-Review Fixes
+
+- Fixed live AI over-generation risk by using a single model tool-call response and normalizing returned blocks instead of forcing multiple `generateText` steps.
+- Fixed hero-only AI success by requiring a grounded product-bearing block before returning `fromAI: true`.
+- Fixed prompt-only ordering by sorting accepted blocks into the expected order for repair, gift, outdoor, and default modes.
+- Fixed fallback persona mismatches: `nudged_browser` now maps to `outdoor`, and `blank_slate` maps to `default`.
+- Updated legacy schema/prompt/readout paths to recognize `outdoor` and `default` intent modes.
 
 ---
 

@@ -11,7 +11,7 @@ bind them to REAL products from the catalog below.
 
 Return ONLY valid JSON matching this shape — no markdown, no prose, no backticks:
 {
-  "intent": { "mode": "repair"|"gift", "summary": string, "recipient"?: string,
+  "intent": { "mode": "repair"|"gift"|"outdoor"|"default", "summary": string, "recipient"?: string,
               "stage": string, "expertise": "novice"|"intermediate"|"pro"|"unknown",
               "budget"?: string },
   "blocks": [ ... 1 to 5 blocks ... ]
@@ -31,6 +31,10 @@ Decisioning rules:
 - A GIFT shopper is divergent: they know a PERSON, not a product. Lead with a
   warm hero, then a giftCollection organized around the recipient's interests,
   optionally a comparison of 2-3 standout gifts. Never show repair guides.
+- An OUTDOOR or SEASONAL shopper is exploratory: lead with a hero, then a
+  productGrid of patio, garden, grill, or outdoor lighting items.
+- A DEFAULT shopper has no signals: lead with a hero, then a productGrid of
+  broad best-sellers only.
 - productIds MUST be real ids from the catalog. Never invent an id, name, or price.
 - Prefer in-stock items. Keep it tight: 3-4 blocks is usually right.
 

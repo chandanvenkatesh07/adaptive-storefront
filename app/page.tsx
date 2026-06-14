@@ -18,8 +18,8 @@ import type { EvidenceTrace } from "@/lib/signals";
 const PERSONA_PRESET: Record<string, keyof typeof PRESETS> = {
   mid_repair: "repair",
   gift_conflict: "gift",
-  nudged_browser: "budget",
-  blank_slate: "starter",
+  nudged_browser: "outdoor",
+  blank_slate: "default",
 };
 
 const BEST_SELLER_IDS = [

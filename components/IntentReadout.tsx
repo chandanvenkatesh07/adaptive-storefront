@@ -19,6 +19,13 @@ const CONFIDENCE_LABEL: Record<EvidenceTrace["confidence"], string> = {
   none:   "NONE",
 };
 
+const MODE_LABEL: Record<Intent["mode"], string> = {
+  repair: "REPAIR / PROJECT",
+  gift: "GIFT SHOPPING",
+  outdoor: "OUTDOOR / SEASONAL",
+  default: "POPULAR DEFAULTS",
+};
+
 function EvidenceSection({ evidence }: { evidence: EvidenceTrace }) {
   if (evidence.items.length === 0 && !evidence.conflictNote) {
     return (
@@ -77,7 +84,7 @@ export function IntentReadout({
         <span className="ir-title">INFERRED INTENT</span>
         <span className={`ir-src ir-${source}`}>{source === "preset" ? "curated" : source}</span>
       </div>
-      <div className="ir-mode">{intent.mode === "gift" ? "GIFT SHOPPING" : "REPAIR / PROJECT"}</div>
+      <div className="ir-mode">{MODE_LABEL[intent.mode]}</div>
       <p className="ir-summary">{intent.summary}</p>
       <div className="ir-grid">
         <Row k="stage" v={intent.stage} />

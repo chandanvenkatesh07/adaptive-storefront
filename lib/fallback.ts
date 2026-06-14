@@ -51,6 +51,43 @@ export const PRESETS: Record<string, { label: string; input: string; spec: PageS
     },
   },
 
+  outdoor: {
+    label: "Refresh the patio",
+    input: "I'm browsing outdoor and garden ideas for spring.",
+    spec: {
+      intent: {
+        mode: "outdoor",
+        summary: "Soft outdoor and seasonal interest, likely browsing patio and garden upgrades",
+        stage: "exploring",
+        expertise: "unknown",
+        budget: "flexible",
+      },
+      blocks: [
+        { type: "hero", headline: "Make the outside feel ready for the weekend", sub: "Seasonal picks for the patio, garden, and the small upgrades that make outdoor space easier to use." },
+        { type: "productGrid", title: "Outdoor picks worth a look", productIds: ["sku_string_lights", "sku_bistro_set", "sku_expandable_hose", "sku_garden_bed", "sku_potting_soil", "sku_grill_set"] },
+        { type: "comparison", title: "Small upgrades, different jobs", productIds: ["sku_string_lights", "sku_expandable_hose", "sku_garden_bed"] },
+      ],
+    },
+  },
+
+  default: {
+    label: "Browse best sellers",
+    input: "New shopper with no history or signals.",
+    spec: {
+      intent: {
+        mode: "default",
+        summary: "Cold-start shopper with no signal history",
+        stage: "browsing",
+        expertise: "unknown",
+        budget: "unknown",
+      },
+      blocks: [
+        { type: "hero", headline: "Start with the products most homes eventually need", sub: "A grounded default shelf of popular, in-stock basics across lighting, tools, paint, and workwear." },
+        { type: "productGrid", title: "Popular this week", productIds: ["sku_led_bulbs", "sku_thermostat", "sku_step_ladder", "sku_paint_kit", "sku_multitool", "sku_drill_combo"] },
+      ],
+    },
+  },
+
   starter: {
     label: "Build a starter toolkit",
     input: "I just moved into my first place and own zero tools. Where do I start?",
