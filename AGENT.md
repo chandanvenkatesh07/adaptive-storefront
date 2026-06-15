@@ -55,10 +55,7 @@ those constraints *are* the product.
 |---|---|---|
 | `lib/catalog.ts` | source of truth | 32 products. The ONLY place products/prices/stock exist. `tags` are the join key to signals. |
 | `lib/schema.ts` | contract + grounding | Zod `PageSpecSchema`; `ground()` drops invented ids and empty blocks. |
-| `lib/prompt.ts` | decisioning | System prompt: shopper input → block selection. Encodes repair-vs-gift layout rules. |
 | `lib/fallback.ts` | safety net + scenarios | 6 hand-verified PRESETS (repair, gift, outdoor, default, starter, budget). Used as no-key fallback and demo content. |
-| `app/api/render/route.ts` | legacy route | Original JSON render route. Still works; not used by M2+ home page. |
-| `components/Renderer.tsx` | legacy renderer | Original switch-over-blocks renderer. Still in codebase; not used by M1+ UI. |
 
 ### Added in signal-driven personas phase
 
@@ -575,8 +572,6 @@ Model: `claude-sonnet-4-6` via `@ai-sdk/anthropic` + AI SDK v6.
 
 - The Google Fonts `<link>` in `app/layout.tsx` triggers a harmless CSS-minify warning
   in sandboxed/offline builds. Do not "fix" it by removing the fonts.
-- `app/api/render/route.ts` is the legacy JSON render route. The active home-page path
-  is `app/actions.tsx` (M2+).
 - Playwright is installed globally via homebrew at `/opt/homebrew/lib/node_modules/playwright`.
   If scripting browser tests, `require()` from that path.
 - AI SDK v6 (`ai@6`) does not export `ai/rsc` or `createStreamableUI`. The streaming
