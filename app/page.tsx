@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { generatePage, type GeneratedPage } from "@/app/actions";
+import { type GeneratedPage, type PageBlock, type PageMode } from "@/lib/schema";
 import { ComparisonSection } from "@/components/sections/ComparisonSection";
 import { GuideSection } from "@/components/sections/GuideSection";
 import { HeroBanner } from "@/components/sections/HeroBanner";
@@ -16,6 +16,16 @@ import { usePersona } from "@/lib/persona-context";
 import type { Persona } from "@/lib/personas";
 import { inferFromSignals } from "@/lib/signals";
 import type { EvidenceTrace } from "@/lib/signals";
+
+type StreamEvent =
+  | { type: "block"; block: PageBlock; mode?: PageMode }
+  | { type: "done"; fromAI: boolean }
+  | { type: "fallback"; blocks: PageBlock[]; mode: PageMode; fromAI: false };
+
+function buildFallback(preset: string): GeneratedPage {
+  const spec = PRESETS[preset]?.spec ?? PRESETS.starter.spec;
+  return { blocks: spec.blocks, mode: spec.intent.mode, fromAI: false };
+}
 
 const PAGE_CACHE_KEY = 'buildright_page_v1';
 
@@ -229,15 +239,16 @@ function HomeInner() {
   const { persona, evidence } = usePersona();
   const [page, setPage] = useState<GeneratedPage | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const requestId = useRef(0);
+  const pageRef = useRef<GeneratedPage | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const isFirstRun = useRef(true);
 
   useEffect(() => {
-    // Don't generate a persona page when the user is browsing search results
     if (q) return;
     if (!persona) {
-      requestId.current += 1;
+      abortRef.current?.abort();
       setPage(null);
+      pageRef.current = null;
       setIsLoading(false);
       return;
     }
@@ -247,33 +258,129 @@ function HomeInner() {
       const cached = readPageCache(persona.id);
       if (cached) {
         setPage(cached);
+        pageRef.current = cached;
         return;
       }
     }
 
-    const id = ++requestId.current;
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+    let cancelled = false;
+
     const fallbackPreset = PERSONA_PRESET[persona.id] ?? "starter";
     const { description } = inferFromSignals(persona.signals);
 
     setPage(null);
+    pageRef.current = null;
     setIsLoading(true);
 
-    generatePage(description, fallbackPreset)
-      .then((nextPage) => {
-        if (requestId.current !== id) return;
-        setPage(nextPage);
-        writePageCache(persona.id, nextPage);
-      })
-      .catch(() => {
-        if (requestId.current !== id) return;
-        const spec = PRESETS[fallbackPreset].spec;
-        const fallback = { blocks: spec.blocks, mode: spec.intent.mode, fromAI: false };
-        setPage(fallback);
-        writePageCache(persona.id, fallback);
-      })
-      .finally(() => {
-        if (requestId.current === id) setIsLoading(false);
-      });
+    const runCompletenessCheck = () => {
+      if (cancelled) return;
+      const current = pageRef.current;
+      if (!current || current.blocks.length === 0) {
+        const fb = buildFallback(fallbackPreset);
+        setPage(fb);
+        pageRef.current = fb;
+        writePageCache(persona.id, fb);
+        setIsLoading(false);
+        return;
+      }
+      const types = new Set(current.blocks.map(b => b.type));
+      const hasProducts = current.blocks.some(
+        b => "productIds" in b && (b as { productIds: string[] }).productIds.length > 0
+      );
+      const isComplete =
+        types.has("hero") &&
+        hasProducts &&
+        (current.mode !== "repair" || (types.has("guide") && types.has("productGrid"))) &&
+        (current.mode !== "gift" || types.has("giftCollection"));
+      if (!isComplete) {
+        const fb = buildFallback(fallbackPreset);
+        setPage(fb);
+        pageRef.current = fb;
+        writePageCache(persona.id, fb);
+      } else {
+        writePageCache(persona.id, current);
+      }
+      setIsLoading(false);
+    };
+
+    let interBlockTimer: ReturnType<typeof setTimeout> | null = null;
+    const resetTimer = () => {
+      if (interBlockTimer) clearTimeout(interBlockTimer);
+      interBlockTimer = setTimeout(() => { if (!cancelled) runCompletenessCheck(); }, 4000);
+    };
+
+    let loadingCleared = false;
+
+    const run = async () => {
+      try {
+        const response = await fetch("/api/gen-page", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ input: description, fallbackPreset }),
+          signal: ac.signal,
+        });
+
+        const reader = response.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.trim() || cancelled) continue;
+            const event = JSON.parse(line) as StreamEvent;
+            if (event.type === "block") {
+              resetTimer();
+              setPage(prev => {
+                const next: GeneratedPage = {
+                  blocks: [...(prev?.blocks ?? []), event.block],
+                  mode: event.mode ?? prev?.mode ?? "default",
+                  fromAI: true,
+                };
+                pageRef.current = next;
+                return next;
+              });
+              if (!loadingCleared) {
+                loadingCleared = true;
+                setIsLoading(false);
+              }
+            } else if (event.type === "done") {
+              if (interBlockTimer) clearTimeout(interBlockTimer);
+              runCompletenessCheck();
+            } else if (event.type === "fallback") {
+              if (interBlockTimer) clearTimeout(interBlockTimer);
+              if (!cancelled) {
+                const fb: GeneratedPage = { blocks: event.blocks, mode: event.mode, fromAI: false };
+                setPage(fb);
+                pageRef.current = fb;
+                writePageCache(persona.id, fb);
+                setIsLoading(false);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        if (!cancelled) runCompletenessCheck();
+      } finally {
+        if (interBlockTimer) clearTimeout(interBlockTimer);
+      }
+    };
+
+    run();
+
+    return () => {
+      cancelled = true;
+      ac.abort();
+      if (interBlockTimer) clearTimeout(interBlockTimer);
+    };
   }, [persona, q]);
 
   return (

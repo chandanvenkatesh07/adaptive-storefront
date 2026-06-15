@@ -87,12 +87,12 @@ those constraints *are* the product.
 
 | File | Responsibility |
 |---|---|
-| `app/actions.tsx` | Server action `generatePage(input, fallbackPreset)`. Uses AI SDK `generateText` + 5 rendering tools. Grounds product IDs, normalizes block order by mode, falls back to preset on invalid output or missing API key. Returns `{ blocks, mode, fromAI }`. |
+| `app/api/gen-page/route.ts` | POST Route Handler. Streams NDJSON to client as model emits each tool call. Uses AI SDK `streamText` + 5 rendering tools. Per-block Zod + grounding validation; falls back to preset on missing API key or error. Replaced `app/actions.tsx` in M5. |
 | `components/sections/HeroBanner.tsx` | Hero section supporting modes: repair, gift, outdoor, default. |
 | `components/sections/GuideSection.tsx` | Numbered how-to guide section. |
 | `components/sections/ProductGridSection.tsx` | Grounded product grid. |
 | `components/sections/ComparisonSection.tsx` | Comparison cards with inline Add to Cart. |
-| `components/sections/PageSkeleton.tsx` | Loading skeleton shown while `generatePage()` is pending. |
+| `components/sections/PageSkeleton.tsx` | Loading skeleton shown while waiting for first block from the stream. Dismissed when the hero block arrives. |
 
 ### Added in Milestone 3 (Product detail + Cart)
 
@@ -574,9 +574,10 @@ Model: `claude-sonnet-4-6` via `@ai-sdk/anthropic` + AI SDK v6.
   in sandboxed/offline builds. Do not "fix" it by removing the fonts.
 - Playwright is installed globally via homebrew at `/opt/homebrew/lib/node_modules/playwright`.
   If scripting browser tests, `require()` from that path.
-- AI SDK v6 (`ai@6`) does not export `ai/rsc` or `createStreamableUI`. The streaming
-  approach uses a custom NDJSON route (`app/api/gen-page/route.ts`) if needed, or the
-  `generateText` server action approach in `app/actions.tsx`.
+- AI SDK v6 (`ai@6`) does not export `ai/rsc` or `createStreamableUI`. Streaming uses
+  `streamText` in `app/api/gen-page/route.ts` with NDJSON over `ReadableStream`. Client
+  reads via `fetch` + `ReadableStream` reader, appending blocks to state as they arrive.
+- `app/actions.tsx` was deleted in M5. The active generation path is `app/api/gen-page/route.ts`.
 
 ---
 

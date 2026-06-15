@@ -50,6 +50,13 @@ export const PageSpecSchema = z.object({
 
 export type PageSpec = z.infer<typeof PageSpecSchema>;
 export type Intent = z.infer<typeof IntentSchema>;
+export type PageBlock = PageSpec["blocks"][number];
+export type PageMode = PageSpec["intent"]["mode"];
+export type GeneratedPage = {
+  blocks: PageBlock[];
+  mode: PageMode;
+  fromAI: boolean;
+};
 
 // ---- Grounding bind step ----
 // Strip any product id the model invented. If a block ends up with no real
