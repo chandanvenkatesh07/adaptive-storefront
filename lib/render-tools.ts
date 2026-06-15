@@ -4,6 +4,12 @@ import type { PageBlock, PageMode } from "@/lib/schema";
 
 export const heroModeSchema = z.enum(["repair", "gift", "outdoor", "default", "project"]);
 
+// Note: the MCP server passes schema.shape (raw shape) to McpServer.tool().
+// The gen-page route passes the full z.object() to the AI SDK tool() helper.
+// If you add .refine() or .transform() to any schema here, those refinements
+// apply to the gen-page path but NOT to the MCP path (.shape strips them).
+// Keep schemas to plain field definitions only.
+
 export const renderHeroSchema = z.object({
   headline: z.string().max(90),
   sub: z.string().max(160),

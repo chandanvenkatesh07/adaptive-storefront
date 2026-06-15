@@ -4,7 +4,6 @@ import { catalogSummary } from "@/lib/catalog";
 import { PRESETS } from "@/lib/fallback";
 import type { PageSpec, PageBlock, PageMode } from "@/lib/schema";
 import {
-  heroModeSchema,
   renderHeroSchema,
   renderProductsSchema,
   renderGuideSchema,

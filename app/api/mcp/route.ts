@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp";
 import { z } from "zod";
-import { byId, catalogSummary } from "@/lib/catalog";
+import { catalogSummary } from "@/lib/catalog";
 import {
   renderHeroSchema,
   renderProductsSchema,
@@ -52,6 +52,7 @@ function createServer(): McpServer {
             "- PROJECT/BUILD: renderHero(mode:project) → renderProducts → optionally renderGuide",
             "- COLD START: renderHero(mode:default) → renderProducts",
             "- Use only real product IDs from the catalog resource. Never invent IDs.",
+            "- Prefer in-stock items.",
             "- Use 3 to 5 tool calls total.",
             "",
             "Read the buildright://catalog resource first to see available products.",
@@ -61,13 +62,14 @@ function createServer(): McpServer {
     })
   );
 
-  // renderHero — always first, sets the intent mode and visual identity
+  // renderHero — always first, sets the intent mode and visual identity.
+  // mode is returned as a separate field (not inside the block) to match the PageBlock type contract.
   server.tool(
     "renderHero",
     TOOL_DESCRIPTIONS.renderHero,
     renderHeroSchema.shape,
     async ({ headline, sub, mode }) => ({
-      content: [{ type: "text" as const, text: JSON.stringify({ type: "hero", headline, sub, mode }) }],
+      content: [{ type: "text" as const, text: JSON.stringify({ block: { type: "hero", headline, sub }, mode }) }],
     })
   );
 
@@ -127,12 +129,19 @@ function createServer(): McpServer {
 }
 
 async function handleMcp(request: Request): Promise<Response> {
-  const transport = new WebStandardStreamableHTTPServerTransport({
-    sessionIdGenerator: undefined, // stateless — safe for serverless
-  });
-  const server = createServer();
-  await server.connect(transport);
-  return transport.handleRequest(request);
+  try {
+    const transport = new WebStandardStreamableHTTPServerTransport({
+      sessionIdGenerator: undefined, // stateless — new transport required per request
+    });
+    const server = createServer();
+    await server.connect(transport);
+    return transport.handleRequest(request);
+  } catch {
+    return new Response(
+      JSON.stringify({ jsonrpc: "2.0", error: { code: -32603, message: "Internal error" } }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
+  }
 }
 
 export { handleMcp as GET, handleMcp as POST, handleMcp as DELETE };
