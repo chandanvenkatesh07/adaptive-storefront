@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.84",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "ai": "^6.0.205",
     "next": "14.2.5",
     "react": "18.3.1",
