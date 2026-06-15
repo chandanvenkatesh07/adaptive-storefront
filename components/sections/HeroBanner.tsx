@@ -12,9 +12,10 @@ export function HeroBanner({
   mode?: HeroMode;
 }) {
   const label =
-    mode === "repair" ? "Repair Guide" :
-    mode === "gift" ? "Gift Shop" :
+    mode === "repair"  ? "Repair Guide" :
+    mode === "gift"    ? "Gift Shop" :
     mode === "outdoor" ? "Outdoor Projects" :
+    mode === "project" ? "Build Mode" :
     "Featured";
 
   const tone =
@@ -22,7 +23,9 @@ export function HeroBanner({
       ? "bg-gradient-to-br from-brand to-brand-dark"
       : mode === "outdoor"
         ? "bg-gradient-to-br from-ink via-ink to-[#35513d]"
-        : "bg-ink";
+        : mode === "project"
+          ? "bg-gradient-to-br from-[#1a1a2e] via-ink to-[#16213e]"
+          : "bg-ink";
 
   return (
     <section className={`rounded-xl px-8 py-12 ${tone}`}>

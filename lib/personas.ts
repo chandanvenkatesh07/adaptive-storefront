@@ -55,4 +55,13 @@ export const PERSONAS: Persona[] = [
     role: "Cold start — no history",
     signals: [],
   },
+  {
+    id: "budget_gift",
+    name: "Budget Gift Shopper",
+    role: "Housewarming gift — price-sensitive, under $50",
+    signals: [
+      { type: "search",   value: "housewarming gift under 50",  tags: ["gift", "affordable"], recency: 1.0, confidence: 1.0 },
+      { type: "search",   value: "practical home gift",          tags: ["gift", "popular"],    recency: 0.7, confidence: 0.9 },
+    ],
+  },
 ];

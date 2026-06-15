@@ -20,10 +20,11 @@ const CONFIDENCE_LABEL: Record<EvidenceTrace["confidence"], string> = {
 };
 
 const MODE_LABEL: Record<Intent["mode"], string> = {
-  repair: "REPAIR / PROJECT",
-  gift: "GIFT SHOPPING",
+  repair:  "REPAIR / PROJECT",
+  gift:    "GIFT SHOPPING",
   outdoor: "OUTDOOR / SEASONAL",
   default: "POPULAR DEFAULTS",
+  project: "BUILD PROJECT",
 };
 
 function EvidenceSection({ evidence }: { evidence: EvidenceTrace }) {

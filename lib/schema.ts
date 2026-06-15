@@ -6,7 +6,7 @@ import { byId } from "./catalog";
 // real product ids — never arbitrary markup.
 
 export const IntentSchema = z.object({
-  mode: z.enum(["repair", "gift", "outdoor", "default"]),
+  mode: z.enum(["repair", "gift", "outdoor", "default", "project"]),
   summary: z.string().max(120), // one human-readable line, shown in the Intent Readout
   recipient: z.string().optional(), // gift mode: who it's for
   stage: z.string(), // e.g. "diagnosing", "exploring", "comparing"

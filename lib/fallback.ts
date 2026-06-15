@@ -107,6 +107,31 @@ export const PRESETS: Record<string, { label: string; input: string; spec: PageS
     },
   },
 
+  project: {
+    label: "Start a build project",
+    input: "I'm starting a workshop project and need a drill, circular saw, and the right bits.",
+    spec: {
+      intent: {
+        mode: "project",
+        summary: "Active builder equipping for a woodworking or construction project",
+        stage: "equipping",
+        expertise: "intermediate",
+        budget: "flexible",
+      },
+      blocks: [
+        { type: "hero", headline: "What are you building?", sub: "Power tools and accessories for the project you've been putting off. Start with the right setup and add as you go." },
+        { type: "productGrid", title: "The tools you'll reach for", productIds: ["sku_drill_combo", "sku_circular_saw", "sku_drill_bits", "sku_saw_blades"] },
+        { type: "guide", title: "Set up your workspace in 4 steps", steps: [
+          "Start with a drill/driver combo — it handles 80% of fastening jobs before you need anything else.",
+          "Add a circular saw when you're cutting sheet goods or framing lumber.",
+          "Stock the right bits and blades for your material; dull tooling is the #1 cause of bad cuts.",
+          "Keep a dedicated workbench or flat surface — improvised setups cause more mistakes than bad tools.",
+        ] },
+        { type: "comparison", title: "The two most-reached-for tools", productIds: ["sku_drill_combo", "sku_circular_saw"] },
+      ],
+    },
+  },
+
   budget: {
     label: "Housewarming gift under $50",
     input: "Need a housewarming gift for a new homeowner, but keep it under $50.",

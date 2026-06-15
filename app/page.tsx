@@ -44,6 +44,7 @@ const PERSONA_PRESET: Record<string, keyof typeof PRESETS> = {
   gift_conflict:  "gift",
   nudged_browser: "outdoor",
   blank_slate:    "default",
+  budget_gift:    "budget",
 };
 
 const BEST_SELLER_IDS = [

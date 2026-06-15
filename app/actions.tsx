@@ -24,6 +24,7 @@ Rules:
 - A REPAIR shopper is convergent: renderHero(mode: repair), renderGuide, renderProducts, optionally renderComparison.
 - A GIFT shopper is divergent: renderHero(mode: gift), renderGiftCollection, then renderComparison with 2 or 3 standout options.
 - An OUTDOOR or SEASONAL shopper should get renderHero(mode: outdoor) and renderProducts with patio, garden, grill, or lighting items.
+- A PROJECT or BUILD shopper (drill, plywood, saw, workshop) should get renderHero(mode: project), renderProducts with power tools and accessories, optionally renderGuide for a build how-to.
 - A COLD START shopper should get renderHero(mode: default) and renderProducts with broad best-sellers.
 - productIds must be real IDs from the catalog. Never invent product IDs, names, prices, or stock states.
 - Prefer in-stock items.
@@ -32,7 +33,7 @@ Rules:
 Catalog (id | name | price | category | stock | tags):
 ${catalogSummary()}`;
 
-const heroModeSchema = z.enum(["repair", "gift", "outdoor", "default"]);
+const heroModeSchema = z.enum(["repair", "gift", "outdoor", "default", "project"]);
 const renderHeroInputSchema = z.object({
   headline: z.string().max(90),
   sub: z.string().max(160),
@@ -57,10 +58,11 @@ const renderComparisonInputSchema = z.object({
 });
 
 const BLOCK_ORDER: Record<PageMode, PageBlock["type"][]> = {
-  repair: ["hero", "guide", "productGrid", "comparison"],
-  gift: ["hero", "giftCollection", "comparison", "productGrid"],
+  repair:  ["hero", "guide", "productGrid", "comparison"],
+  gift:    ["hero", "giftCollection", "comparison", "productGrid"],
   outdoor: ["hero", "productGrid", "comparison"],
   default: ["hero", "productGrid", "comparison"],
+  project: ["hero", "productGrid", "guide", "comparison"],
 };
 
 function fallbackPage(fallbackPreset: string): GeneratedPage {
