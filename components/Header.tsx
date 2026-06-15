@@ -26,6 +26,7 @@ export function Header() {
     : persona?.id === 'gift_conflict' ? 'Search gifts, DIY tools, home improvement...'
     : persona?.id === 'nudged_browser'? 'Search patio, garden, outdoor...'
     : persona?.id === 'blank_slate'   ? 'Search all products...'
+    : persona?.id === 'budget_gift'   ? 'Search housewarming gifts, home essentials...'
     : 'What can we help you find today?';
 
   const handleSelectPersona = (personaId: string) => {

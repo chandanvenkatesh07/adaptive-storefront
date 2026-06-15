@@ -69,7 +69,3 @@ export function ground(spec: PageSpec): PageSpec {
   return { intent: spec.intent, blocks };
 }
 
-// Parse + ground in one call. Throws on schema failure (caller falls back).
-export function parseAndGround(raw: unknown): PageSpec {
-  return ground(PageSpecSchema.parse(raw));
-}
