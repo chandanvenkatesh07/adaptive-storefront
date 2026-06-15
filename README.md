@@ -46,9 +46,9 @@ Alternatively, with the Vercel CLI: `npx vercel` from this folder.
 
 ### Cost note for a public link
 Cached specs cost nothing. The live path costs model tokens **per click**, so if you
-set a key on a public URL, every visitor's "Generate layout" spends money. For a
-LinkedIn demo, either leave the key off (cached is convincing on its own) or keep the
-key for your own recorded walkthrough and ship the public link keyless.
+set a key on a public URL, every visitor's "Generate layout" spends money. Either
+leave the key off (cached is convincing on its own) or keep the key for your own
+recorded walkthrough and ship the public link keyless.
 
 ## What's deliberately NOT here (the honest v1 boundary)
 

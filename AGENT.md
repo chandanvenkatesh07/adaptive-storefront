@@ -82,7 +82,7 @@ those constraints *are* the product.
 | `components/ProductCard.tsx` | Product tile: category abbr placeholder, name/brand/price, orange Add to Cart, links to /product/[id]. |
 | `app/layout.tsx` | Server component. PersonaProvider > CartProvider > Header > CategoryNav > main > CartDrawer. Google Fonts. |
 | `app/page.tsx` | Client. Watches persona context → calls `generatePage()` → renders EvidenceBar + PersonaContent. Default: hero + best-sellers. |
-| `app/product/[id]/page.tsx` | Server component. generateStaticParams() → 32 pre-rendered routes. Passes candidate pool (up to 8) to RelatedProducts. |
+| `app/product/[id]/page.tsx` | Server component. generateStaticParams() → 32 pre-rendered routes. Passes full catalog minus current product (sorted by tag-overlap strength) to RelatedProducts. |
 | `app/product/[id]/AddToCartButton.tsx` | Client. −/qty/+ selector + addItem(product, qty). Resets qty to 1 after add. |
 | `app/product/[id]/RelatedProducts.tsx` | Client. Reads PersonaContext, scores candidate pool by persona signal tags, shows top 4. Falls back to tag-overlap order when no persona. |
 
@@ -116,8 +116,8 @@ Shell, Tailwind design system, CartContext, PersonaContext, Header, CategoryNav,
 ### M3 — COMPLETE (Product Detail + Cart)
 Persona-ranked related products (client-side, SSG preserved). Qty selector on product page. `/cart` route with order summary. CartDrawer Checkout links to `/cart`.
 
-### M4 — PENDING (Final docs)
-Final `AGENT.md` sweep + `review.md` covering the complete M1–M5 arc. Do not start until M5 is complete.
+### M4 — COMPLETE (Final docs, M1–M3)
+AGENT.md file map updated to reflect all M1–M3 changes. review.md expanded to cover the complete M1–M3 arc. External references cleaned up.
 
 ### M5 — NEXT (Live intent tracking + parallel pre-rendering)
 Full spec in §6 below.
@@ -438,7 +438,7 @@ repair  →  gift  →  outdoor  [now]
 
 ---
 
-### 6.11 The demo script (what makes it land on LinkedIn)
+### 6.11 The demo script
 
 The recording proves one technically hard thing per scene:
 
@@ -480,7 +480,7 @@ instant. Script the recording at a natural pace.
 
 ---
 
-### 6.13 What is intentionally fake / demo-ware (be honest in the LinkedIn post)
+### 6.13 What is intentionally fake / demo-ware
 
 - The keyword→cluster mapping is a lookup table, not ML. In production you'd use a
   lightweight embedding classifier or a fine-tuned tagger.
