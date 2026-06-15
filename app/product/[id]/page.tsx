@@ -12,11 +12,16 @@ export default function ProductPage({ params }: { params: { id: string } }) {
   const product = byId(params.id);
   if (!product) notFound();
 
-  // Expanded pool: all tag-matched products (up to 8).
-  // RelatedProducts client component re-ranks by persona signal tags at runtime.
+  // Full catalog minus current product, sorted by tag-overlap strength descending.
+  // No-persona path shows top 4 by overlap; persona path re-ranks the whole pool
+  // by signal tags so a repair persona on a grill page can still surface repair tools.
   const candidates = CATALOG
-    .filter(p => p.id !== product.id && p.tags.some(t => product.tags.includes(t)))
-    .slice(0, 8);
+    .filter(p => p.id !== product.id)
+    .sort((a, b) => {
+      const aScore = a.tags.filter(t => product.tags.includes(t)).length;
+      const bScore = b.tags.filter(t => product.tags.includes(t)).length;
+      return bScore - aScore;
+    });
 
   return (
     <div className="min-h-screen bg-concrete">

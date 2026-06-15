@@ -8,8 +8,8 @@
 
 ### 1. Persona-aware related products (`app/product/[id]/`)
 
-- **`page.tsx`** — Server component now passes an expanded candidate pool (up to 8 tag-matched products, previously sliced to 4) to the new `RelatedProducts` client component. The server does no ranking.
-- **`RelatedProducts.tsx`** — Client component (`'use client'`). Reads `PersonaContext`. When a persona is active, scores each candidate by `(persona signal tags ∩ product tags) × 2 + (product-own tag overlap)`, sorts descending, shows top 4. When no persona is active, preserves the original tag-overlap order. Section label changes from "Frequently Bought Together" to "Based on your [persona name] signals" and shows a `PERSONA-RANKED` badge.
+- **`page.tsx`** — Server component passes the full catalog minus the current product (up to 31 items) to the new `RelatedProducts` client component, sorted by tag-overlap count descending. This ensures a persona with no tag overlap with the current product (e.g., Mid-Repair on a grill page) can still surface relevant items from the whole catalog.
+- **`RelatedProducts.tsx`** — Client component (`'use client'`). Reads `PersonaContext`. When a persona is active, scores each candidate by `(persona signal tags ∩ product tags) × 2 + (product-own tag overlap)`, sorts descending, shows top 4. When no persona is active, shows top 4 from the server-sorted pool (ranked by tag-overlap count, highest first). Section label changes from "Frequently Bought Together" to "Based on your [persona name] signals" and shows a `PERSONA-RANKED` badge.
 - The ranking is client-side only (hydrates on top of the SSG page) — the 32 product pages remain statically generated with no runtime server cost.
 
 ### 2. Quantity selector on product page (`app/product/[id]/AddToCartButton.tsx`)
@@ -38,20 +38,21 @@
 ## What to review
 
 ### Persona-ranked related products
-1. Select **Mid-Repair Homeowner** persona. Navigate to any plumbing product (e.g. `/product/sku_faucet_kit`). The section heading should read "Based on your mid-repair homeowner signals" with a `PERSONA-RANKED` badge. Related products should be plumbing/repair items (PTFE tape, basin wrench, silicone sealant, supply lines) ranked ahead of, say, outdoor or gift items.
-2. Select **Gift Shopper** persona. Navigate to a tool product. Related products should surface gift/dad-tagged items near the top.
-3. Clear persona. The heading should revert to "Frequently Bought Together" with no badge. Order returns to plain tag-overlap.
+1. Select **Mid-Repair Homeowner** persona. Navigate to any plumbing product (e.g. `/product/sku_faucet_kit`). The section heading should read "Based on your mid-repair homeowner signals" with a `PERSONA-RANKED` badge. Related products should be plumbing/repair items (PTFE tape, basin wrench, silicone sealant, supply lines) ranked ahead of outdoor or gift items.
+2. **Cross-category test (P2 fix):** Select **Mid-Repair Homeowner** persona. Navigate to a product outside the repair category (e.g. a grill or gift item). The persona-ranked section should still surface repair/plumbing items from the full catalog, even though they share no tags with the current product.
+3. Select **Gift Shopper** persona. Navigate to a tool product. Related products should surface gift/dad-tagged items near the top.
+4. Clear persona. The heading should revert to "Frequently Bought Together" with no badge. Order reverts to tag-overlap strength (highest tag-count match first).
 
 ### Qty selector
-4. On any in-stock product page, increment qty to 3, click Add to Cart. CartDrawer should show quantity 3 for that item and the correct line total ($price × 3). Qty selector resets to 1 after add.
-5. On an out-of-stock product (e.g. `/product/sku_apron`), all three controls (−, qty display, +, Add to Cart) should be disabled / opacity-40.
+5. On any in-stock product page, increment qty to 3, click Add to Cart. CartDrawer should show quantity 3 for that item and the correct line total ($price × 3). Qty selector resets to 1 after add.
+6. On an out-of-stock product (e.g. `/product/sku_apron`), all three controls (−, qty display, +, Add to Cart) should be disabled / opacity-40.
 
 ### Cart page
-6. Add 2–3 items from different product pages. Open `/cart`. Verify: item list correct, qty controls (+/−) update line totals and subtotal live, Remove removes items, Clear all empties the cart.
-7. Subtotal × 1.08 = Order Total (free shipping). Verify arithmetic.
-8. Cart badge count in header stays in sync while on `/cart`.
-9. Empty cart state: visit `/cart` with no items — should show empty-state card, not a broken layout.
-10. CartDrawer "Checkout" button navigates to `/cart` and closes the drawer.
+7. Add 2–3 items from different product pages. Open `/cart`. Verify: item list correct, qty controls (+/−) update line totals and subtotal live, Remove removes items, Clear all empties the cart.
+8. Subtotal × 1.08 = Order Total (free shipping). Verify arithmetic.
+9. Cart badge count in header stays in sync while on `/cart`.
+10. Empty cart state: visit `/cart` with no items — should show empty-state card, not a broken layout.
+11. CartDrawer "Checkout" button navigates to `/cart` and closes the drawer.
 
 ---
 
