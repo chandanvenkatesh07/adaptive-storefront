@@ -15,6 +15,28 @@ import type { Persona } from "@/lib/personas";
 import { inferFromSignals } from "@/lib/signals";
 import type { EvidenceTrace } from "@/lib/signals";
 
+const PAGE_CACHE_KEY = 'buildright_page_v1';
+
+function readPageCache(personaId: string): GeneratedPage | null {
+  try {
+    const raw = sessionStorage.getItem(PAGE_CACHE_KEY);
+    if (!raw) return null;
+    const cache = JSON.parse(raw) as Record<string, GeneratedPage>;
+    return cache[personaId] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function writePageCache(personaId: string, page: GeneratedPage) {
+  try {
+    const raw = sessionStorage.getItem(PAGE_CACHE_KEY);
+    const cache: Record<string, GeneratedPage> = raw ? JSON.parse(raw) : {};
+    cache[personaId] = page;
+    sessionStorage.setItem(PAGE_CACHE_KEY, JSON.stringify(cache));
+  } catch {}
+}
+
 const PERSONA_PRESET: Record<string, keyof typeof PRESETS> = {
   mid_repair: "repair",
   gift_conflict: "gift",
@@ -177,6 +199,11 @@ export default function HomePage() {
   const [page, setPage] = useState<GeneratedPage | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const requestId = useRef(0);
+  // True on the first effect run after mount. Used to serve from page cache
+  // when the persona was restored from sessionStorage on refresh (same persona,
+  // no reason to re-call the AI). Set to false after the first run so that
+  // subsequent persona changes always generate a fresh page.
+  const isFirstRun = useRef(true);
 
   useEffect(() => {
     if (!persona) {
@@ -186,8 +213,18 @@ export default function HomePage() {
       return;
     }
 
-    const id = requestId.current + 1;
-    requestId.current = id;
+    // Refresh scenario: persona restored from sessionStorage on first mount.
+    // Serve from page cache if available — no skeleton, no AI call.
+    if (isFirstRun.current) {
+      isFirstRun.current = false;
+      const cached = readPageCache(persona.id);
+      if (cached) {
+        setPage(cached);
+        return;
+      }
+    }
+
+    const id = ++requestId.current;
     const fallbackPreset = PERSONA_PRESET[persona.id] ?? "starter";
     const { description } = inferFromSignals(persona.signals);
 
@@ -196,13 +233,16 @@ export default function HomePage() {
 
     generatePage(description, fallbackPreset)
       .then((nextPage) => {
-        if (requestId.current === id) setPage(nextPage);
+        if (requestId.current !== id) return;
+        setPage(nextPage);
+        writePageCache(persona.id, nextPage);
       })
       .catch(() => {
-        if (requestId.current === id) {
-          const spec = PRESETS[fallbackPreset].spec;
-          setPage({ blocks: spec.blocks, mode: spec.intent.mode, fromAI: false });
-        }
+        if (requestId.current !== id) return;
+        const spec = PRESETS[fallbackPreset].spec;
+        const fallback = { blocks: spec.blocks, mode: spec.intent.mode, fromAI: false };
+        setPage(fallback);
+        writePageCache(persona.id, fallback);
       })
       .finally(() => {
         if (requestId.current === id) setIsLoading(false);
