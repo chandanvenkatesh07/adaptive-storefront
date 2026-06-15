@@ -8,7 +8,7 @@ import { PRESETS } from "@/lib/fallback";
 import type { PageSpec } from "@/lib/schema";
 
 type PageBlock = PageSpec["blocks"][number];
-type PageMode = PageSpec["intent"]["mode"] | "outdoor" | "default";
+type PageMode = PageSpec["intent"]["mode"];
 
 export type GeneratedPage = {
   blocks: PageBlock[];
@@ -148,8 +148,9 @@ function normalizeBlocks(rawBlocks: PageBlock[], mode: PageMode): PageBlock[] | 
   const types = new Set(blocks.map((block) => block.type));
 
   if (!blocks.some(hasProductIds)) return null;
-  if (mode === "repair" && (!types.has("guide") || !types.has("productGrid"))) return null;
-  if (mode === "gift" && !types.has("giftCollection")) return null;
+  if (mode === "repair"  && (!types.has("guide") || !types.has("productGrid"))) return null;
+  if (mode === "gift"    && !types.has("giftCollection")) return null;
+  if (mode === "project" && !types.has("productGrid")) return null;
   if ((mode === "outdoor" || mode === "default") && !types.has("productGrid")) return null;
 
   return blocks;
