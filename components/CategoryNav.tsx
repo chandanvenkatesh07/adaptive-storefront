@@ -1,4 +1,5 @@
 'use client';
+import { useRouter } from 'next/navigation';
 import { usePersona } from '@/lib/persona-context';
 
 const CATEGORIES: { label: string; tags: string[] }[] = [
@@ -16,6 +17,7 @@ const CATEGORIES: { label: string; tags: string[] }[] = [
 
 export function CategoryNav() {
   const { persona } = usePersona();
+  const router = useRouter();
 
   const categories = !persona
     ? CATEGORIES
@@ -33,6 +35,7 @@ export function CategoryNav() {
           {categories.map(cat => (
             <button
               key={cat.label}
+              onClick={() => router.push(`/?q=${encodeURIComponent(cat.label)}`)}
               className="shrink-0 px-4 py-3 text-xs font-display font-semibold text-steel hover:text-brand border-b-2 border-transparent hover:border-brand transition-colors whitespace-nowrap"
             >
               {cat.label}

@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCart } from '@/lib/cart';
 import { usePersona } from '@/lib/persona-context';
 import { PERSONAS } from '@/lib/personas';
@@ -11,6 +12,14 @@ export function Header() {
   const { persona, setActive, clear } = usePersona();
   const [showDropdown, setShowDropdown] = useState(false);
   const [search, setSearch] = useState('');
+  const router = useRouter();
+
+  const handleSearch = () => {
+    const q = search.trim();
+    if (!q) return;
+    router.push(`/?q=${encodeURIComponent(q)}`);
+    setSearch('');
+  };
 
   const placeholder =
     persona?.id === 'mid_repair'      ? 'Search faucet parts, plumbing, tools...'
@@ -44,11 +53,11 @@ export function Header() {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && search.trim() && alert(`Search: ${search}`)}
+            onKeyDown={e => e.key === 'Enter' && handleSearch()}
             placeholder={placeholder}
             className="flex-1 px-4 py-2 bg-white text-ink text-sm rounded-l focus:outline-none placeholder:text-steel min-w-0"
           />
-          <button className="bg-brand hover:bg-brand-dark px-4 py-2 rounded-r transition-colors shrink-0">
+          <button onClick={handleSearch} className="bg-brand hover:bg-brand-dark px-4 py-2 rounded-r transition-colors shrink-0">
             <SearchIcon />
           </button>
         </div>

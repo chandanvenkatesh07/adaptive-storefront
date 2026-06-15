@@ -34,9 +34,12 @@ export function HeroBanner({
           {headline}
         </h1>
         <p className="text-white/75 text-base mb-6 leading-relaxed">{sub}</p>
-        <button className="bg-white text-ink font-display font-black px-6 py-3 rounded-lg hover:bg-concrete transition-colors text-sm">
+        <a
+          href="#products"
+          className="bg-white text-ink font-display font-black px-6 py-3 rounded-lg hover:bg-concrete transition-colors text-sm inline-block"
+        >
           {cta}
-        </button>
+        </a>
       </div>
     </section>
   );
