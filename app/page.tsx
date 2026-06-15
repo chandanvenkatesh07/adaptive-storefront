@@ -157,13 +157,14 @@ function EvidenceBar({
 }
 
 function PersonaContent({ page }: { page: GeneratedPage }) {
+  const firstContentIdx = page.blocks.findIndex(b => b.type !== 'hero');
   return (
     <div className="space-y-10">
       {page.blocks.map((block, i) => {
         const style = { animationDelay: `${i * 90}ms` };
         const wrapperClass = "animate-section-in opacity-0";
-        // Anchor target for Hero CTA "Shop Now" link
-        const id = i === 1 ? "products" : undefined;
+        // Anchor target for Hero CTA "Shop Now" — first non-hero block
+        const id = i === firstContentIdx ? "products" : undefined;
 
         switch (block.type) {
           case "hero":

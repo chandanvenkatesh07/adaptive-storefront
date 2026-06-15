@@ -2,7 +2,7 @@
 import { useRouter } from 'next/navigation';
 import { usePersona } from '@/lib/persona-context';
 
-const CATEGORIES: { label: string; tags: string[] }[] = [
+const CATEGORIES: { label: string; tags: string[]; query?: string }[] = [
   { label: 'Plumbing',     tags: ['plumbing', 'repair', 'leak'] },
   { label: 'Tools',        tags: ['tool', 'repair', 'beginner'] },
   { label: 'Power Tools',  tags: ['power-tool', 'project'] },
@@ -12,7 +12,8 @@ const CATEGORIES: { label: string; tags: string[] }[] = [
   { label: 'Smart Home',   tags: ['upgrade', 'popular', 'best-seller'] },
   { label: 'Paint',        tags: ['project', 'popular', 'best-seller'] },
   { label: 'Workwear',     tags: ['gift', 'dad', 'popular'] },
-  { label: 'Gift Ideas',   tags: ['gift', 'dad', 'popular'] },
+  // "Gift Ideas" has no matching catalog category; query by tag instead
+  { label: 'Gift Ideas',   tags: ['gift', 'dad', 'popular'], query: 'gift' },
 ];
 
 export function CategoryNav() {
@@ -35,7 +36,7 @@ export function CategoryNav() {
           {categories.map(cat => (
             <button
               key={cat.label}
-              onClick={() => router.push(`/?q=${encodeURIComponent(cat.label)}`)}
+              onClick={() => router.push(`/?q=${encodeURIComponent(cat.query ?? cat.label)}`)}
               className="shrink-0 px-4 py-3 text-xs font-display font-semibold text-steel hover:text-brand border-b-2 border-transparent hover:border-brand transition-colors whitespace-nowrap"
             >
               {cat.label}
