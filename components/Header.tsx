@@ -1,24 +1,50 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/lib/cart';
 import { usePersona } from '@/lib/persona-context';
 import { PERSONAS } from '@/lib/personas';
 import { inferFromSignals } from '@/lib/signals';
+import { useSessionIntent } from '@/lib/session-intent';
 
 export function Header() {
   const { count, setOpen: openCart } = useCart();
   const { persona, setActive, clear } = usePersona();
+  const { addSearchSignal } = useSessionIntent();
   const [showDropdown, setShowDropdown] = useState(false);
   const [search, setSearch] = useState('');
   const router = useRouter();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  // Track the last value emitted by the debounce so submit doesn't double-count it.
+  const lastDebouncedRef = useRef('');
+
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
 
   const handleSearch = () => {
     const q = search.trim();
     if (!q) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    // Only emit the 1.0-weight signal if the debounce hasn't already fired for this text.
+    if (q === lastDebouncedRef.current) {
+      lastDebouncedRef.current = '';
+    } else {
+      addSearchSignal(q, 1.0);
+    }
     router.push(`/?q=${encodeURIComponent(q)}`);
     setSearch('');
+  };
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setSearch(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const trimmed = val.trim();
+    if (!trimmed) return;
+    debounceRef.current = setTimeout(() => {
+      lastDebouncedRef.current = trimmed;
+      addSearchSignal(trimmed, 0.7);
+    }, 800);
   };
 
   const placeholder =
@@ -54,7 +80,7 @@ export function Header() {
         <div className="flex flex-1">
           <input
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={handleSearchChange}
             onKeyDown={e => e.key === 'Enter' && handleSearch()}
             placeholder={placeholder}
             className="flex-1 px-4 py-2 bg-white text-ink text-sm rounded-l focus:outline-none placeholder:text-steel min-w-0"

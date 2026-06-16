@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { byId, CATALOG } from '@/lib/catalog';
 import { AddToCartButton } from './AddToCartButton';
 import { RelatedProducts } from './RelatedProducts';
+import { ProductPageSignal } from '@/components/ProductPageSignal';
 
 export function generateStaticParams() {
   return CATALOG.map(p => ({ id: p.id }));
@@ -93,6 +94,9 @@ export default function ProductPage({ params }: { params: { id: string } }) {
 
         {/* Persona-aware related products */}
         <RelatedProducts candidates={candidates} productTags={product.tags} />
+
+        {/* Fires a browse signal for live intent scoring — renders nothing */}
+        <ProductPageSignal productTags={product.tags} />
       </div>
     </div>
   );

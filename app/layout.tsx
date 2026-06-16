@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { CartProvider } from '@/lib/cart';
 import { PersonaProvider } from '@/lib/persona-context';
+import { SessionIntentProvider } from '@/lib/session-intent';
 import { Header } from '@/components/Header';
 import { CategoryNav } from '@/components/CategoryNav';
 import { CartDrawer } from '@/components/CartDrawer';
@@ -23,14 +24,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <PersonaProvider>
-          <CartProvider>
-            <Header />
-            <CategoryNav />
-            <main>{children}</main>
-            <CartDrawer />
-          </CartProvider>
-        </PersonaProvider>
+        <SessionIntentProvider>
+          <PersonaProvider>
+            <CartProvider>
+              <Header />
+              <CategoryNav />
+              <main>{children}</main>
+              <CartDrawer />
+            </CartProvider>
+          </PersonaProvider>
+        </SessionIntentProvider>
       </body>
     </html>
   );

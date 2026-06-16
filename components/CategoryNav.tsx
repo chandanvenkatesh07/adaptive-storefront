@@ -1,6 +1,7 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { usePersona } from '@/lib/persona-context';
+import { useSessionIntent } from '@/lib/session-intent';
 
 const CATEGORIES: { label: string; tags: string[]; query?: string }[] = [
   { label: 'Plumbing',     tags: ['plumbing', 'repair', 'leak'] },
@@ -19,6 +20,7 @@ const CATEGORIES: { label: string; tags: string[]; query?: string }[] = [
 
 export function CategoryNav() {
   const { persona } = usePersona();
+  const { addBrowseSignal } = useSessionIntent();
   const router = useRouter();
 
   const categories = !persona
@@ -37,7 +39,10 @@ export function CategoryNav() {
           {categories.map(cat => (
             <button
               key={cat.label}
-              onClick={() => router.push(`/?q=${encodeURIComponent(cat.query ?? cat.label)}`)}
+              onClick={() => {
+              addBrowseSignal(cat.tags);
+              router.push(`/?q=${encodeURIComponent(cat.query ?? cat.label)}`);
+            }}
               className="shrink-0 px-4 py-3 text-xs font-display font-semibold text-steel hover:text-brand border-b-2 border-transparent hover:border-brand transition-colors whitespace-nowrap"
             >
               {cat.label}
