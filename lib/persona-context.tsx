@@ -19,10 +19,10 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
   const [persona, setPersona] = useState<Persona | null>(null);
   const [evidence, setEvidence] = useState<EvidenceTrace | null>(null);
 
-  // Rehydrate from sessionStorage on mount (survives refresh, clears on tab close).
+  // Rehydrate from localStorage on mount so the demo shopper survives browser restarts.
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem(PERSONA_KEY);
+      const raw = localStorage.getItem(PERSONA_KEY);
       if (!raw) return;
       const { personaId, evidence: savedEvidence } = JSON.parse(raw) as {
         personaId: string;
@@ -40,7 +40,7 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
     setPersona(p);
     setEvidence(e);
     try {
-      sessionStorage.setItem(PERSONA_KEY, JSON.stringify({ personaId: p.id, evidence: e }));
+      localStorage.setItem(PERSONA_KEY, JSON.stringify({ personaId: p.id, evidence: e }));
     } catch {}
   };
 
@@ -48,7 +48,7 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
     setPersona(null);
     setEvidence(null);
     try {
-      sessionStorage.removeItem(PERSONA_KEY);
+      localStorage.removeItem(PERSONA_KEY);
     } catch {}
   };
 

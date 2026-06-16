@@ -9,11 +9,12 @@ import { HeroBanner } from "@/components/sections/HeroBanner";
 import { PageSkeleton } from "@/components/sections/PageSkeleton";
 import { ProductGridSection } from "@/components/sections/ProductGridSection";
 import { ProductCard } from "@/components/ProductCard";
+import { PersonaPicker } from "@/components/PersonaPicker";
 import { CATALOG, byId } from "@/lib/catalog";
 import type { Product } from "@/lib/catalog";
 import { PRESETS } from "@/lib/fallback";
 import { usePersona } from "@/lib/persona-context";
-import type { Persona } from "@/lib/personas";
+import { type Persona } from "@/lib/personas";
 import { inferFromSignals } from "@/lib/signals";
 import type { EvidenceTrace } from "@/lib/signals";
 
@@ -120,24 +121,24 @@ function EvidenceBar({
   fromAI: boolean;
 }) {
   const confidenceColor = {
-    high: "text-brand",
-    medium: "text-steel",
-    low: "text-steel-2",
-    none: "text-steel-2",
+    high: "text-[#087F6F] dark:text-[#73DCCB]",
+    medium: "text-[#9A5A16] dark:text-[#F3B35D]",
+    low: "text-steel dark:text-[#B9C6C9]",
+    none: "text-steel-2 dark:text-[#8EA0A4]",
   }[evidence.confidence];
 
   return (
-    <div className="bg-ink rounded-lg px-5 py-3 flex flex-wrap items-center gap-3">
+    <div className="rounded-lg border border-[#E8B16F] bg-[#FFF8EC] px-5 py-3 flex flex-wrap items-center gap-3 shadow-sm dark:border-[#2E6F69] dark:bg-[#102E2B]">
       <div className="flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full bg-brand shadow-[0_0_6px_#E8552D]" />
-        <span className="font-mono text-xs text-white/50 uppercase tracking-widest">
+        <span className="w-2 h-2 rounded-full bg-[#087F6F] shadow-[0_0_6px_rgba(8,127,111,0.55)] dark:bg-[#73DCCB]" />
+        <span className="font-mono text-xs text-[#8A5A22] uppercase tracking-widest dark:text-[#A9CFC9]">
           Signal Evidence
         </span>
         <span className={`font-mono text-xs font-bold uppercase tracking-widest ${confidenceColor}`}>
           {evidence.confidence}
         </span>
         {fromAI && (
-          <span className="font-mono text-xs bg-brand/20 text-brand px-2 py-0.5 rounded uppercase tracking-wider">
+          <span className="font-mono text-xs bg-[#087F6F]/10 text-[#087F6F] px-2 py-0.5 rounded uppercase tracking-wider dark:bg-[#73DCCB]/15 dark:text-[#73DCCB]">
             AI
           </span>
         )}
@@ -147,20 +148,20 @@ function EvidenceBar({
           <span
             key={i}
             className={`font-mono text-xs px-2 py-0.5 rounded ${
-              item.outcome === "fired" ? "bg-brand/20 text-brand"
-              : item.outcome === "suppressed" ? "bg-white/10 text-white/40 line-through"
-              : "bg-white/5 text-white/30 line-through"
+              item.outcome === "fired" ? "bg-[#087F6F]/10 text-[#087F6F] dark:bg-[#73DCCB]/15 dark:text-[#73DCCB]"
+              : item.outcome === "suppressed" ? "bg-[#9A5A16]/10 text-[#9A5A16]/65 line-through dark:bg-white/10 dark:text-white/45"
+              : "bg-black/5 text-steel-2 line-through dark:bg-white/5 dark:text-white/35"
             }`}
           >
             {item.label}
           </span>
         ))}
         {evidence.items.length === 0 && (
-          <span className="font-mono text-xs text-white/30">No signals — showing defaults</span>
+          <span className="font-mono text-xs text-steel-2 dark:text-white/40">No signals — showing defaults</span>
         )}
       </div>
       {evidence.conflictNote && (
-        <p className="w-full font-mono text-xs text-brand/80 border-l-2 border-brand pl-3 mt-1">
+        <p className="w-full font-mono text-xs text-[#9A5A16] border-l-2 border-[#E8B16F] pl-3 mt-1 dark:text-[#F3B35D] dark:border-[#F3B35D]/70">
           {evidence.conflictNote}
         </p>
       )}
@@ -237,7 +238,7 @@ function DefaultHome() {
 function HomeInner() {
   const searchParams = useSearchParams();
   const q = searchParams.get('q') ?? '';
-  const { persona, evidence } = usePersona();
+  const { persona, evidence, setActive, clear } = usePersona();
   const [page, setPage] = useState<GeneratedPage | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const pageRef = useRef<GeneratedPage | null>(null);
@@ -385,6 +386,11 @@ function HomeInner() {
     };
   }, [persona, q]);
 
+  const handleSelectPersona = (selectedPersona: Persona) => {
+    const { evidence: selectedEvidence } = inferFromSignals(selectedPersona.signals);
+    setActive(selectedPersona, selectedEvidence);
+  };
+
   return (
     <div className="min-h-screen bg-concrete">
       <div className="max-w-8xl mx-auto px-4 py-8 space-y-8">
@@ -392,6 +398,7 @@ function HomeInner() {
           <SearchResults query={q} />
         ) : (
           <>
+            <PersonaPicker activePersona={persona} onSelect={handleSelectPersona} onClear={clear} />
             {persona && evidence && (
               <EvidenceBar persona={persona} evidence={evidence} fromAI={page?.fromAI ?? false} />
             )}
