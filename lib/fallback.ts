@@ -51,6 +51,31 @@ export const PRESETS: Record<string, { label: string; input: string; spec: PageS
     },
   },
 
+  appliance: {
+    label: "Compare dishwashers",
+    input: "I'm replacing an older dishwasher and want a quiet stainless model without missing the install parts.",
+    spec: {
+      intent: {
+        mode: "appliance",
+        summary: "High-consideration dishwasher buyer comparing quiet, stainless, and install-ready options",
+        stage: "comparing",
+        expertise: "unknown",
+        budget: "flexible",
+      },
+      blocks: [
+        { type: "hero", headline: "Pick the dishwasher before the installer shows up", sub: "Compare quiet stainless models, confirm the fit, and add the parts a replacement usually needs." },
+        { type: "comparison", title: "Three dishwasher paths", productIds: ["sku_dishwasher_budget", "sku_dishwasher_quiet_stainless", "sku_dishwasher_third_rack"] },
+        { type: "productGrid", title: "Dishwashers and install essentials", productIds: ["sku_dishwasher_quiet_stainless", "sku_dishwasher_compact", "sku_dishwasher_install_kit", "sku_dishwasher_supply_line", "sku_dishwasher_detergent_pods", "sku_appliance_cleaner"] },
+        { type: "guide", title: "Buying checklist before checkout", steps: [
+          "Measure the cabinet opening and confirm whether you need a standard 24 in. or compact 18 in. model.",
+          "Compare noise level, finish, rack layout, and budget before choosing the dishwasher.",
+          "Add the install kit and supply line if the old hookups are worn or missing.",
+          "Check delivery, haul-away, and installation timing before you schedule the replacement.",
+        ] },
+      ],
+    },
+  },
+
   outdoor: {
     label: "Refresh the patio",
     input: "I'm browsing outdoor and garden ideas for spring.",

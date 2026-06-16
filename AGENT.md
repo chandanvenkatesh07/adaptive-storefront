@@ -53,15 +53,15 @@ those constraints *are* the product.
 
 | File | Layer | Responsibility |
 |---|---|---|
-| `lib/catalog.ts` | source of truth | 32 products. The ONLY place products/prices/stock exist. `tags` are the join key to signals. |
+| `lib/catalog.ts` | source of truth | 40 products. The ONLY place products/prices/stock exist. `tags` are the join key to signals. |
 | `lib/schema.ts` | contract + grounding | Zod `PageSpecSchema`; `ground()` drops invented ids and empty blocks. |
-| `lib/fallback.ts` | safety net + scenarios | 6 hand-verified PRESETS (repair, gift, outdoor, default, starter, budget). Used as no-key fallback and demo content. |
+| `lib/fallback.ts` | safety net + scenarios | 7 hand-verified PRESETS (repair, appliance, gift, outdoor, default, starter, budget). Used as no-key fallback and demo content. |
 
 ### Added in signal-driven personas phase
 
 | File | Responsibility |
 |---|---|
-| `lib/personas.ts` | 4 PERSONAS with typed signal bundles (type, value, tags, recency, confidence, consumable?). |
+| `lib/personas.ts` | Static PERSONAS with typed signal bundles (type, value, tags, recency, confidence, consumable?). |
 | `lib/signals.ts` | `inferFromSignals()`: weights signals, detects conflicts, emits EvidenceTrace with per-item outcome. |
 
 ### Added in Milestone 1 (Foundation Shell)
@@ -74,12 +74,12 @@ those constraints *are* the product.
 | `lib/cart.tsx` | CartContext: items, addItem(product, qty?), removeItem, updateQty, clearCart, total, count, open/setOpen. |
 | `lib/persona-context.tsx` | PersonaContext: persona, evidence, setActive(p, e), clear(). Single source of truth for active persona. |
 | `components/Header.tsx` | Sticky bg-ink header. Logo, search, "Sign in as" persona dropdown, cart badge. Placeholder adapts to persona. |
-| `components/CategoryNav.tsx` | White border-b nav, 10 categories. Reorders by tag-intersection score when persona active. |
+| `components/CategoryNav.tsx` | White border-b nav, 11 categories. Reorders by tag-intersection score when persona active. |
 | `components/CartDrawer.tsx` | Fixed right panel, item list, +/- qty, subtotal, Checkout (links to /cart). |
 | `components/ProductCard.tsx` | Product tile: category abbr placeholder, name/brand/price, orange Add to Cart, links to /product/[id]. |
 | `app/layout.tsx` | Server component. PersonaProvider > CartProvider > Header > CategoryNav > main > CartDrawer. Google Fonts. |
 | `app/page.tsx` | Client. Watches persona context → calls `generatePage()` → renders EvidenceBar + PersonaContent. Default: hero + best-sellers. |
-| `app/product/[id]/page.tsx` | Server component. generateStaticParams() → 32 pre-rendered routes. Passes full catalog minus current product (sorted by tag-overlap strength) to RelatedProducts. |
+| `app/product/[id]/page.tsx` | Server component. generateStaticParams() → all catalog products as pre-rendered routes. Passes full catalog minus current product (sorted by tag-overlap strength) to RelatedProducts. |
 | `app/product/[id]/AddToCartButton.tsx` | Client. −/qty/+ selector + addItem(product, qty). Resets qty to 1 after add. |
 | `app/product/[id]/RelatedProducts.tsx` | Client. Reads PersonaContext, scores candidate pool by persona signal tags, shows top 4. Falls back to tag-overlap order when no persona. |
 
@@ -88,7 +88,7 @@ those constraints *are* the product.
 | File | Responsibility |
 |---|---|
 | `app/api/gen-page/route.ts` | POST Route Handler. Streams NDJSON to client as model emits each tool call. Uses AI SDK `streamText` + 5 rendering tools. Per-block Zod + grounding validation; falls back to preset on missing API key or error. Replaced `app/actions.tsx` in M5. |
-| `components/sections/HeroBanner.tsx` | Hero section supporting modes: repair, gift, outdoor, default. |
+| `components/sections/HeroBanner.tsx` | Hero section supporting modes: repair, gift, appliance, outdoor, project, default. |
 | `components/sections/GuideSection.tsx` | Numbered how-to guide section. |
 | `components/sections/ProductGridSection.tsx` | Grounded product grid. |
 | `components/sections/ComparisonSection.tsx` | Comparison cards with inline Add to Cart. |
@@ -105,7 +105,7 @@ those constraints *are* the product.
 ## 4. Milestone state
 
 ### M1 — COMPLETE (Foundation Shell)
-Shell, Tailwind design system, CartContext, PersonaContext, Header, CategoryNav, CartDrawer, ProductCard, 32 SSG product pages.
+Shell, Tailwind design system, CartContext, PersonaContext, Header, CategoryNav, CartDrawer, ProductCard, catalog-backed SSG product pages.
 
 ### M2 — COMPLETE (GenUI Layout Generation)
 `generatePage()` server action with 5 AI rendering tools. Grounding, normalization, fallback. EvidenceBar with AI badge.
@@ -145,9 +145,11 @@ Confidence thresholds: totalPositiveWeight > 1.5 → "high", > 0.6 → "medium",
 ```typescript
 const PERSONA_PRESET: Record<string, keyof typeof PRESETS> = {
   mid_repair:     'repair',
+  appliance_buyer:'appliance',
   gift_conflict:  'gift',
   nudged_browser: 'outdoor',
   blank_slate:    'default',
+  budget_gift:    'budget',
 };
 ```
 
@@ -171,21 +173,23 @@ switched.** That's the money shot. Everything else is setup for that moment.
 
 ---
 
-### 6.2 Intent clusters (replaces and extends the 4-persona vocabulary)
+### 6.2 Intent clusters (replaces and extends the static persona vocabulary)
 
-Five clusters with intentionally distinct visual identities. If two clusters produce
+Six clusters with intentionally distinct visual identities. If two clusters produce
 visually similar pages, the demo loses its point.
 
 | Cluster key | Signal keywords / tags | Page feel |
 |---|---|---|
 | `repair` | faucet, leak, wrench, cartridge, drain, clog, fix, plumbing | Utilitarian. Dark hero: "Let's fix it." Guide first, then exact parts. |
 | `gift` | gift, Father's Day, birthday, present, ideas, dad, popular | Warm orange-gradient hero: "A gift he'll reach for." Gift collection, then comparison. |
+| `appliance` | dishwasher, appliance, quiet, stainless, third-rack, install, kitchen | High-consideration. Hero: "Pick the dishwasher." Comparison first, then appliances/accessories and checklist. |
 | `outdoor` | patio, garden, grill, summer, porch, mulch, deck, lawn, seasonal | Natural. Hero: "Build the backyard." Seasonal product grid. |
 | `project` | drill, build, cut, install, workshop, plywood, saw, lumber, power-tool | Bold. Hero: "What are you building?" Power tools and accessories first. |
 | `starter` | first home, moved, beginner, basics, apartment, essentials, new homeowner | Friendly. Hero: "Start with what you'll actually use." Essential 5. |
 
-**Note on `project`:** This is a new cluster not in M1–M3. It requires a new PRESET in
-`lib/fallback.ts` and a new mode value (`"project"`) in `app/actions.tsx` before M5a.
+**Note:** `appliance` and `project` modes already exist in the current fallback and
+streaming generation path. Any new cluster must update `lib/fallback.ts`,
+`lib/schema.ts`, `lib/render-tools.ts`, and `app/api/gen-page/route.ts` together.
 
 ---
 
@@ -270,8 +274,8 @@ Modified files:
 | `components/CategoryNav.tsx` | Emit browse signal to `SessionIntentStore` on category click. |
 | `app/page.tsx` | Watch `SessionIntentStore.activeCluster` instead of (or in addition to) `PersonaContext`. Call `generatePage()` on cluster switch; if cache hit, skip generation. |
 | `app/layout.tsx` | Wrap with `SessionIntentProvider` (inside existing providers). |
-| `lib/fallback.ts` | Add `project` preset spec. |
-| `app/actions.tsx` | Add `"project"` to `heroModeSchema` enum and `BLOCK_ORDER`. |
+| `lib/fallback.ts` | Add any new preset specs needed by live clusters. |
+| `app/api/gen-page/route.ts` | Add any new cluster rules to the streaming generation prompt. |
 
 ---
 
@@ -447,7 +451,7 @@ The recording proves one technically hard thing per scene:
 | 0:35 | Type "Father's Day gift ideas" | Gift at 0.3 → generation fires in background |
 | 0:45 | Click on a drill product | Gift crosses 0.4 → **INSTANT** switch, no skeleton. Banner: "Optimized for gift buying" + "(instant)" |
 | 0:55 | Click "repair" in the trail | **INSTANT** switch back. Repair page was still cached. |
-| 1:05 | Title card | "Intent inferred in JS. Layout generated by Claude. Pages pre-built before you switch." |
+| 1:05 | Title card | "Intent inferred in JS. Layout generated by OpenAI. Pages pre-built before you switch." |
 
 The money shot is 0:45 — instant switch with no loading. Everything before is setup.
 The 0:55 instant switch-back is the exclamation point: *both* contexts were alive.
@@ -498,7 +502,7 @@ Build, verify, and commit each layer independently. Each is testable in isolatio
 
 **M5a — Live signal capture + scoring (no page switching)**
 
-1. Add `project` preset to `lib/fallback.ts`. Add `"project"` mode to `app/actions.tsx`.
+1. Confirm every live cluster has a matching preset in `lib/fallback.ts` and mode support in the streaming generation path.
 2. Create `lib/intent-clusters.ts` with cluster defs, scoring functions.
 3. Create `lib/session-intent.tsx` with `SessionIntentProvider`, `useSessionIntent()`,
    and `sessionStorage` persistence. Does not yet trigger any page generation.
@@ -559,12 +563,14 @@ npm run build        # type-checks + builds; must pass before committing
 ```
 
 - **No API key** → serves grounded cached PRESET specs. Good for a free public deploy.
-- **With key** → set `ANTHROPIC_API_KEY` in `.env.local` (dev) or Vercel env (prod).
+- **With key** → set `OPENAI_API_KEY` in `.env.local` (dev) or Vercel env (prod).
+  Optional: set `OPENAI_MODEL`; default is `gpt-5.4-mini` for lower-cost live demos.
 
 Deploy: push to GitHub → import on Vercel → (optional) add env var → deploy.
 
 Stack: Next.js 14 App Router · TypeScript · Tailwind CSS v3 · Zod · no DB.
-Model: `claude-sonnet-4-6` via `@ai-sdk/anthropic` + AI SDK v6.
+Model: `gpt-5.4-mini` by default via `@ai-sdk/openai` + AI SDK v6.
+Use `gpt-5.5` for a higher-quality recorded walkthrough if needed.
 
 ---
 

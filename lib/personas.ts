@@ -16,7 +16,7 @@ export type Persona = {
   signals: Signal[];
 };
 
-// Four personas, each stressing a different part of the inference logic.
+// Demo personas, each stressing a different part of the inference logic.
 // Signals are mocked fixtures — there is no real CDP/event stream.
 export const PERSONAS: Persona[] = [
   {
@@ -27,6 +27,16 @@ export const PERSONAS: Persona[] = [
       { type: "search",       value: "faucet cartridge",  tags: ["repair", "plumbing"],         recency: 1.0, confidence: 1.0 },
       { type: "search",       value: "drain snake",        tags: ["repair", "plumbing"],         recency: 0.85, confidence: 1.0 },
       { type: "cart_abandon", value: "faucet repair kit",  tags: ["repair", "plumbing"],         recency: 0.75, confidence: 0.9 },
+    ],
+  },
+  {
+    id: "appliance_buyer",
+    name: "Appliance Buyer",
+    role: "High-consideration — comparing dishwasher options",
+    signals: [
+      { type: "search",       value: "quiet stainless dishwasher",  tags: ["appliance", "dishwasher", "kitchen", "quiet", "stainless", "compare"], recency: 1.0, confidence: 1.0 },
+      { type: "search",       value: "dishwasher installation kit", tags: ["appliance", "dishwasher", "kitchen", "install"],                       recency: 0.85, confidence: 1.0 },
+      { type: "cart_abandon", value: "premium third rack dishwasher", tags: ["appliance", "dishwasher", "kitchen", "premium", "third-rack"],        recency: 0.7, confidence: 0.8 },
     ],
   },
   {

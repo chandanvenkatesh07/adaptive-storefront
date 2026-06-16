@@ -23,6 +23,7 @@ export function Header() {
 
   const placeholder =
     persona?.id === 'mid_repair'      ? 'Search faucet parts, plumbing, tools...'
+    : persona?.id === 'appliance_buyer' ? 'Search dishwashers, install kits, appliance care...'
     : persona?.id === 'gift_conflict' ? 'Search gifts, DIY tools, home improvement...'
     : persona?.id === 'nudged_browser'? 'Search patio, garden, outdoor...'
     : persona?.id === 'blank_slate'   ? 'Search all products...'

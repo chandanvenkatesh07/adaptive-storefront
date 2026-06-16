@@ -2,7 +2,7 @@ import { z } from "zod";
 import { byId } from "@/lib/catalog";
 import type { PageBlock, PageMode } from "@/lib/schema";
 
-export const heroModeSchema = z.enum(["repair", "gift", "outdoor", "default", "project"]);
+export const heroModeSchema = z.enum(["repair", "gift", "appliance", "outdoor", "default", "project"]);
 
 // Note: the MCP server passes schema.shape (raw shape) to McpServer.tool().
 // The gen-page route passes the full z.object() to the AI SDK tool() helper.
@@ -35,8 +35,8 @@ export const renderComparisonSchema = z.object({
 
 export const TOOL_DESCRIPTIONS = {
   renderHero:           "Render the page hero banner. Call this first and only once.",
-  renderProducts:       "Render a product grid for repair parts, kits, seasonal products, or best-sellers.",
-  renderGuide:          "Render a numbered how-to guide. Use only for repair and project scenarios.",
+  renderProducts:       "Render a product grid for repair parts, appliance accessories, kits, seasonal products, or best-sellers.",
+  renderGuide:          "Render a numbered how-to guide or buying checklist for repair, project, or appliance scenarios.",
   renderGiftCollection: "Render a curated gift grid. Use only for gift scenarios.",
   renderComparison:     "Render a side-by-side comparison of 2 to 4 real products.",
 } as const;

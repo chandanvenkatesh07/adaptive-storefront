@@ -1,4 +1,4 @@
-type HeroMode = "repair" | "gift" | "outdoor" | "default" | string;
+type HeroMode = "repair" | "gift" | "appliance" | "outdoor" | "default" | string;
 
 export function HeroBanner({
   headline,
@@ -14,6 +14,7 @@ export function HeroBanner({
   const label =
     mode === "repair"  ? "Repair Guide" :
     mode === "gift"    ? "Gift Shop" :
+    mode === "appliance" ? "Appliance Buying" :
     mode === "outdoor" ? "Outdoor Projects" :
     mode === "project" ? "Build Mode" :
     "Featured";
@@ -21,6 +22,8 @@ export function HeroBanner({
   const tone =
     mode === "gift"
       ? "bg-gradient-to-br from-brand to-brand-dark"
+      : mode === "appliance"
+        ? "bg-gradient-to-br from-ink via-[#253f55] to-[#406b7a]"
       : mode === "outdoor"
         ? "bg-gradient-to-br from-ink via-ink to-[#35513d]"
         : mode === "project"

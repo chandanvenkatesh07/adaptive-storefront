@@ -27,7 +27,7 @@ function buildFallback(preset: string): GeneratedPage {
   return { blocks: spec.blocks, mode: spec.intent.mode, fromAI: false };
 }
 
-const PAGE_CACHE_KEY = 'buildright_page_v1';
+const PAGE_CACHE_KEY = 'buildright_page_v2';
 
 function readPageCache(personaId: string): GeneratedPage | null {
   try {
@@ -51,6 +51,7 @@ function writePageCache(personaId: string, page: GeneratedPage) {
 
 const PERSONA_PRESET: Record<string, keyof typeof PRESETS> = {
   mid_repair:     "repair",
+  appliance_buyer:"appliance",
   gift_conflict:  "gift",
   nudged_browser: "outdoor",
   blank_slate:    "default",
@@ -294,6 +295,7 @@ function HomeInner() {
         types.has("hero") &&
         hasProducts &&
         (current.mode !== "repair" || (types.has("guide") && types.has("productGrid"))) &&
+        (current.mode !== "appliance" || (types.has("comparison") && types.has("productGrid") && types.has("guide"))) &&
         (current.mode !== "gift" || types.has("giftCollection"));
       if (!isComplete) {
         const fb = buildFallback(fallbackPreset);
@@ -400,7 +402,7 @@ function HomeInner() {
 
       <footer className="max-w-8xl mx-auto px-4 py-8 mt-8 border-t border-line">
         <p className="font-mono text-xs text-steel-2 leading-relaxed">
-          BuildRight Adaptive Storefront · 32 products · intent-driven layout via AI tool calls · M1–M4 complete
+          BuildRight Adaptive Storefront · 40 products · repair, gift, and appliance-buying layouts via AI tool calls
         </p>
       </footer>
     </div>

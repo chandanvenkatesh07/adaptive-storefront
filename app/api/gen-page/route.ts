@@ -1,4 +1,4 @@
-import { anthropic } from "@ai-sdk/anthropic";
+import { openai } from "@ai-sdk/openai";
 import { streamText, tool } from "ai";
 import { catalogSummary } from "@/lib/catalog";
 import { PRESETS } from "@/lib/fallback";
@@ -13,6 +13,8 @@ import {
   blockFromToolCall,
 } from "@/lib/render-tools";
 
+const OPENAI_MODEL = process.env.OPENAI_MODEL?.trim() || "gpt-5.4-mini";
+
 const SYSTEM = `You are the layout engine for BuildRight, an adaptive home-improvement storefront.
 Call rendering tools to assemble page blocks for the shopper described by the user.
 
@@ -20,6 +22,7 @@ Rules:
 - Call renderHero first and only once.
 - A REPAIR shopper is convergent: call renderHero(mode: repair), then renderGuide, then renderProducts, optionally renderComparison. Call tools in that exact order.
 - A GIFT shopper is divergent: call renderHero(mode: gift), then renderGiftCollection, then renderComparison with 2 or 3 standout options. Call tools in that exact order.
+- An APPLIANCE shopper is high-consideration: call renderHero(mode: appliance), then renderComparison with 2 to 4 dishwasher models, then renderProducts with matching appliances and install or cleaning accessories, then renderGuide as a buying/install checklist. Call tools in that exact order.
 - An OUTDOOR or SEASONAL shopper: call renderHero(mode: outdoor), then renderProducts with patio, garden, grill, or lighting items. Call tools in that exact order.
 - A PROJECT or BUILD shopper (drill, plywood, saw, workshop): call renderHero(mode: project), then renderProducts with power tools and accessories, optionally renderGuide for a build how-to. Call tools in that exact order.
 - A COLD START shopper: call renderHero(mode: default), then renderProducts with broad best-sellers. Call tools in that exact order.
@@ -44,7 +47,7 @@ export async function POST(request: Request) {
       const enqueue = (obj: object) =>
         controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
 
-      if (!process.env.ANTHROPIC_API_KEY) {
+      if (!process.env.OPENAI_API_KEY) {
         const fb = fallbackBlocks(fallbackPreset);
         (fb.blocks as PageBlock[]).forEach((block, i) =>
           enqueue({ type: "block", block, ...(i === 0 ? { mode: fb.mode } : {}) })
@@ -56,7 +59,7 @@ export async function POST(request: Request) {
 
       try {
         const result = streamText({
-          model: anthropic("claude-sonnet-4-6"),
+          model: openai(OPENAI_MODEL),
           system: SYSTEM,
           prompt: (input as string).slice(0, 800),
           toolChoice: "required",
@@ -94,4 +97,3 @@ export async function POST(request: Request) {
     headers: { "Content-Type": "application/x-ndjson" },
   });
 }
-

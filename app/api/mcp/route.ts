@@ -48,6 +48,7 @@ function createServer(): McpServer {
             "- Call renderHero first and only once.",
             "- REPAIR: renderHero(mode:repair) → renderGuide → renderProducts → optionally renderComparison",
             "- GIFT: renderHero(mode:gift) → renderGiftCollection → renderComparison",
+            "- APPLIANCE: renderHero(mode:appliance) → renderComparison with dishwasher models → renderProducts with appliances/accessories → renderGuide as a buying/install checklist",
             "- OUTDOOR/SEASONAL: renderHero(mode:outdoor) → renderProducts",
             "- PROJECT/BUILD: renderHero(mode:project) → renderProducts → optionally renderGuide",
             "- COLD START: renderHero(mode:default) → renderProducts",
@@ -87,7 +88,7 @@ function createServer(): McpServer {
     }
   );
 
-  // renderGuide — numbered how-to guide for repair and project scenarios
+  // renderGuide — numbered how-to guide or buying checklist for repair, project, and appliance scenarios
   server.tool(
     "renderGuide",
     TOOL_DESCRIPTIONS.renderGuide,

@@ -4,6 +4,7 @@ import { usePersona } from '@/lib/persona-context';
 
 const CATEGORIES: { label: string; tags: string[]; query?: string }[] = [
   { label: 'Plumbing',     tags: ['plumbing', 'repair', 'leak'] },
+  { label: 'Appliances',   tags: ['appliance', 'dishwasher', 'kitchen'] },
   { label: 'Tools',        tags: ['tool', 'repair', 'beginner'] },
   { label: 'Power Tools',  tags: ['power-tool', 'project'] },
   { label: 'Outdoor',      tags: ['outdoor', 'patio', 'seasonal'] },
