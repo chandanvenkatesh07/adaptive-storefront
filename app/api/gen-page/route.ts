@@ -86,7 +86,8 @@ export async function POST(request: Request) {
 
         enqueue({ type: "done", fromAI: true });
       } catch {
-        enqueue({ type: "done", fromAI: false });
+        const fb = fallbackBlocks(fallbackPreset);
+        enqueue({ type: "fallback", blocks: fb.blocks, mode: fb.mode, fromAI: false });
       }
 
       controller.close();

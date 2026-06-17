@@ -11,7 +11,7 @@ import { useSessionIntent } from '@/lib/session-intent';
 export function Header() {
   const { count, setOpen: openCart } = useCart();
   const { persona, setActive, clear } = usePersona();
-  const { addSearchSignal } = useSessionIntent();
+  const { addSearchSignal, setActiveCluster } = useSessionIntent();
   const [showDropdown, setShowDropdown] = useState(false);
   const [search, setSearch] = useState('');
   const router = useRouter();
@@ -140,7 +140,7 @@ export function Header() {
                 ))}
                 {persona && (
                   <button
-                    onClick={() => { clear(); setShowDropdown(false); }}
+                    onClick={() => { clear(); setActiveCluster(null); setShowDropdown(false); }}
                     className="w-full text-left px-4 py-2 text-xs text-red-500 hover:bg-red-50 transition-colors border-t border-line font-mono"
                   >
                     Clear persona — browse as guest

@@ -144,7 +144,8 @@ type Action =
   | { type: 'rehydrate'; queue: LiveSignal[]; cache: Partial<Record<ClusterKey, GeneratedPage>>; activeCluster: ClusterKey | null; lockedUntil: number }
   | { type: 'cache_page'; cluster: ClusterKey; page: GeneratedPage }
   | { type: 'switch_cluster'; cluster: ClusterKey }
-  | { type: 'set_cluster'; cluster: ClusterKey | null };
+  | { type: 'set_cluster'; cluster: ClusterKey | null }
+  | { type: 'tick' };
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -176,10 +177,12 @@ function reducer(state: State, action: Action): State {
       return {
         ...state,
         activeCluster: action.cluster,
-        // Lock on manual restore (trail click) to prevent immediate auto-override.
-        // Don't lock when clearing to null so auto-switch can re-engage naturally.
-        ...(action.cluster !== null && { lockedUntil: Date.now() + LOCK_MS }),
+        // Lock on manual restore so auto-switch can't immediately override a trail click.
+        // Reset to 0 when clearing to null so re-engagement happens at normal threshold.
+        lockedUntil: action.cluster !== null ? Date.now() + LOCK_MS : 0,
       };
+    case 'tick':
+      return state;
   }
 }
 
@@ -206,6 +209,7 @@ export function SessionIntentProvider({ children }: { children: React.ReactNode 
 
   const generatingRef = useRef(new Set<ClusterKey>());
   const abortControllersRef = useRef(new Map<ClusterKey, AbortController>());
+  const failedRef = useRef(new Set<ClusterKey>());
   const [rehydratedCluster, setRehydratedCluster] = useState<ClusterKey | null>(null);
 
   useEffect(() => () => {
@@ -262,13 +266,15 @@ export function SessionIntentProvider({ children }: { children: React.ReactNode 
   }, [state.signalQueue, state.cache, state.activeCluster, state.lockedUntil]);
 
   // Background generation: fire /api/gen-page when a cluster crosses GEN_THRESHOLD.
+  // failedRef prevents retry storms — a failed cluster is skipped until page reload.
   useEffect(() => {
     for (const cluster of CLUSTERS) {
       const { key } = cluster;
       if (
         state.clusterScores[key] >= GEN_THRESHOLD &&
         !state.cache[key] &&
-        !generatingRef.current.has(key)
+        !generatingRef.current.has(key) &&
+        !failedRef.current.has(key)
       ) {
         generatingRef.current.add(key);
         const ac = new AbortController();
@@ -277,7 +283,11 @@ export function SessionIntentProvider({ children }: { children: React.ReactNode 
         fetchClusterPage(cluster, ac.signal).then(page => {
           generatingRef.current.delete(key);
           abortControllersRef.current.delete(key);
-          if (page) dispatch({ type: 'cache_page', cluster: key, page });
+          if (page) {
+            dispatch({ type: 'cache_page', cluster: key, page });
+          } else {
+            failedRef.current.add(key);
+          }
         });
       }
     }
@@ -286,18 +296,28 @@ export function SessionIntentProvider({ children }: { children: React.ReactNode 
   // Auto-switch: when the top cluster exceeds SWITCH_THRESHOLD and leads the current
   // cluster by SWITCH_LEAD, switch to it. The lock raises the threshold post-switch
   // to prevent oscillation when two clusters score close together.
+  // A timeout fires a tick dispatch at lock expiry so a blocked cluster gets a second
+  // look even if no new signals arrive.
   useEffect(() => {
     const top = topCluster(state.clusterScores);
     if (!top || top === state.activeCluster) return;
 
     const topScore = state.clusterScores[top];
     const currentScore = state.activeCluster ? state.clusterScores[state.activeCluster] : 0;
-    const effectiveThreshold = Date.now() < state.lockedUntil
+    const now = Date.now();
+    const effectiveThreshold = now < state.lockedUntil
       ? SWITCH_THRESHOLD + 0.2  // raised threshold during lock period
       : SWITCH_THRESHOLD;
 
     if (topScore >= effectiveThreshold && topScore - currentScore >= SWITCH_LEAD) {
       dispatch({ type: 'switch_cluster', cluster: top });
+      return;
+    }
+
+    const remaining = state.lockedUntil - now;
+    if (remaining > 0) {
+      const t = setTimeout(() => dispatch({ type: 'tick' }), remaining + 50);
+      return () => clearTimeout(t);
     }
   }, [state.clusterScores, state.activeCluster, state.lockedUntil]);
 

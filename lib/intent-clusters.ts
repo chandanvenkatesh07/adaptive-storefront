@@ -76,11 +76,21 @@ export function emptyScores(): Record<ClusterKey, number> {
 
 // Returns a per-cluster score (0–1) for a single text signal.
 // Each matching keyword contributes 0.2; capped at 1.0.
+// Longest keywords are matched first and their span is consumed so a phrase like
+// "circular saw" doesn't also credit the shorter "saw" within the same cluster.
 export function scoreTextAgainstClusters(text: string): Record<ClusterKey, number> {
   const lower = text.toLowerCase().trim();
   const scores = emptyScores();
   for (const cluster of CLUSTERS) {
-    const matched = cluster.keywords.filter(kw => lower.includes(kw)).length;
+    const sorted = [...cluster.keywords].sort((a, b) => b.length - a.length);
+    let remaining = lower;
+    let matched = 0;
+    for (const kw of sorted) {
+      if (remaining.includes(kw)) {
+        matched++;
+        remaining = remaining.replace(kw, ' ');
+      }
+    }
     scores[cluster.key] = Math.min(1.0, matched * 0.2);
   }
   return scores;
