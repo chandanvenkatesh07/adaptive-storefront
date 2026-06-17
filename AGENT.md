@@ -116,8 +116,8 @@ Persona-ranked related products (client-side, SSG preserved). Qty selector on pr
 ### M4 — COMPLETE (Final docs, M1–M3)
 AGENT.md file map updated to reflect all M1–M3 changes. review.md expanded to cover the complete M1–M3 arc. External references cleaned up.
 
-### M5 — NEXT (Live intent tracking + parallel pre-rendering)
-Full spec in §6 below.
+### M5 — DONE (Live intent tracking + parallel pre-rendering)
+Full spec and implementation notes in §6 below. All three sub-milestones shipped and committed.
 
 ---
 
@@ -496,42 +496,26 @@ instant. Script the recording at a natural pace.
 
 ---
 
-### 6.14 Build order (M5a → M5b → M5c)
+### 6.14 Build order (M5a → M5b → M5c) — COMPLETE
 
-Build, verify, and commit each layer independently. Each is testable in isolation.
+All three sub-milestones shipped, reviewed, and committed. Deviations from original spec:
 
-**M5a — Live signal capture + scoring (no page switching)**
+- `project` cluster uses `fallbackPreset: 'project'` (the preset already existed in
+  `lib/fallback.ts` — spec draft said to use 'starter' until it was added).
+- `scoreTextAgainstClusters`: `min(1.0, matchCount * 0.2)` — two matching keywords
+  cross GEN_THRESHOLD (0.3) in a single signal, which is the right sensitivity for demo.
+- `set_cluster` (trail click restore) now sets `lockedUntil` to prevent auto-switch
+  from immediately overriding a manual trail navigation.
+- `rehydratedCluster` is exposed on `SessionIntentCtx` so consumers can suppress the
+  banner on page-reload (distinguish rehydration from a live switch).
+- `handleClear` in `app/page.tsx` calls both `clear()` and `setActiveCluster(null)` so
+  clearing a persona does not silently reveal a live cluster page.
+- `fetchClusterPage` flushes the remaining stream buffer after the read loop (handles
+  server responses with no trailing newline on the final `done` event).
 
-1. Confirm every live cluster has a matching preset in `lib/fallback.ts` and mode support in the streaming generation path.
-2. Create `lib/intent-clusters.ts` with cluster defs, scoring functions.
-3. Create `lib/session-intent.tsx` with `SessionIntentProvider`, `useSessionIntent()`,
-   and `sessionStorage` persistence. Does not yet trigger any page generation.
-4. Wire signal capture in `Header.tsx` (search) and `CategoryNav.tsx` (category click).
-5. Create `components/ProductPageSignal.tsx` and render it in `app/product/[id]/page.tsx`.
-6. Add `SessionIntentProvider` to `app/layout.tsx`.
-7. Verify via browser devtools: open console, browse, confirm cluster scores update.
-   No visible UI change yet. Build must pass.
-
-**M5b — Background generation + IntentContextCache**
-
-1. Extend `SessionIntentProvider` to watch for scores crossing 0.3 and fire
-   `generatePage()` for that cluster. Store result in `cache[cluster]`.
-2. Avoid double-firing: if `cache[cluster]` already exists, skip generation.
-3. Avoid firing on cold start (all scores < 0.1): wait for first meaningful signal.
-4. Verify: trigger a search that scores a cluster to 0.3, confirm a network request
-   to the AI fires, confirm the cache populates. No visible UI change yet. Build passes.
-
-**M5c — Auto-switch + banner + intent trail**
-
-1. Watch `clusterScores` in `app/page.tsx`. When top cluster ≥ 0.4 AND lead ≥ 0.1
-   AND ≠ current rendered cluster: swap the page from cache (or skeleton if miss).
-   Apply the intent lock (raise switch threshold for 60s after a switch).
-2. Build and render `components/IntentBanner.tsx` on each switch.
-3. Build and render `components/IntentTrail.tsx` in the EvidenceBar zone.
-4. Wire the trail click-to-restore: set `activeCluster` to the clicked cluster and
-   render from cache (or re-generate if cache miss).
-5. Run the demo script from §6.11 end-to-end. Confirm instant switch at the gift
-   scene. Build must pass. Commit and stop.
+**M5a — Live signal capture + scoring** ✓ committed
+**M5b — Background generation** ✓ committed (part of M5a commit; gen logic in session-intent.tsx)
+**M5c — Auto-switch + banner + intent trail** ✓ committed
 
 ---
 
