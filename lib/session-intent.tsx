@@ -7,6 +7,7 @@ import React, {
   useEffect,
   useReducer,
   useRef,
+  useState,
 } from 'react';
 import {
   type ClusterKey,
@@ -24,6 +25,9 @@ const STORAGE_KEY = 'buildright_intent_v1';
 const QUEUE_MAX = 20;
 const SIGNAL_TTL_MS = 180_000;   // 3 minutes
 const GEN_THRESHOLD = 0.3;       // score at which background generation fires
+const SWITCH_THRESHOLD = 0.4;    // score at which page auto-switches
+const SWITCH_LEAD = 0.1;         // challenger must lead current cluster by this margin
+const LOCK_MS = 60_000;          // after a switch, raise threshold for this long
 
 export type LiveSignal = {
   capturedAt: number;
@@ -57,7 +61,6 @@ function computeScores(queue: LiveSignal[]): Record<ClusterKey, number> {
   return scores;
 }
 
-// What to send as `input` to /api/gen-page for each cluster.
 const CLUSTER_INPUTS: Record<ClusterKey, string> = {
   repair:  'Shopper actively searching for plumbing repair parts and tools. Likely fixing a leaky faucet, drain, or pipe.',
   gift:    "Shopper browsing gift ideas — Father's Day, birthday, or housewarming. Interest in popular DIY and home tools.",
@@ -111,6 +114,16 @@ async function fetchClusterPage(
       }
     }
 
+    // Flush any final line not terminated by \n (e.g. the `done` event).
+    if (buffer.trim()) {
+      try {
+        const event = JSON.parse(buffer) as StreamEvent;
+        if (event.type === 'done') fromAI = event.fromAI;
+        else if (event.type === 'fallback') return { blocks: event.blocks, mode: event.mode, fromAI: false };
+        else if (event.type === 'block') blocks.push(event.block);
+      } catch {}
+    }
+
     return blocks.length > 0 ? { blocks, mode, fromAI } : null;
   } catch (err) {
     if ((err as Error).name === 'AbortError') return null;
@@ -122,12 +135,16 @@ type State = {
   signalQueue: LiveSignal[];
   clusterScores: Record<ClusterKey, number>;
   cache: Partial<Record<ClusterKey, GeneratedPage>>;
+  activeCluster: ClusterKey | null;
+  lockedUntil: number;
 };
 
 type Action =
   | { type: 'add_signal'; signal: LiveSignal }
-  | { type: 'rehydrate'; queue: LiveSignal[]; cache: Partial<Record<ClusterKey, GeneratedPage>> }
-  | { type: 'cache_page'; cluster: ClusterKey; page: GeneratedPage };
+  | { type: 'rehydrate'; queue: LiveSignal[]; cache: Partial<Record<ClusterKey, GeneratedPage>>; activeCluster: ClusterKey | null; lockedUntil: number }
+  | { type: 'cache_page'; cluster: ClusterKey; page: GeneratedPage }
+  | { type: 'switch_cluster'; cluster: ClusterKey }
+  | { type: 'set_cluster'; cluster: ClusterKey | null };
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -143,19 +160,37 @@ function reducer(state: State, action: Action): State {
       const live = action.queue
         .filter(s => liveRecency(s.capturedAt) > 0)
         .slice(-QUEUE_MAX);
-      return { signalQueue: live, clusterScores: computeScores(live), cache: action.cache };
+      return {
+        signalQueue: live,
+        clusterScores: computeScores(live),
+        cache: action.cache,
+        activeCluster: action.activeCluster,
+        lockedUntil: action.lockedUntil,
+      };
     }
     case 'cache_page':
       return { ...state, cache: { ...state.cache, [action.cluster]: action.page } };
+    case 'switch_cluster':
+      return { ...state, activeCluster: action.cluster, lockedUntil: Date.now() + LOCK_MS };
+    case 'set_cluster':
+      return {
+        ...state,
+        activeCluster: action.cluster,
+        // Lock on manual restore (trail click) to prevent immediate auto-override.
+        // Don't lock when clearing to null so auto-switch can re-engage naturally.
+        ...(action.cluster !== null && { lockedUntil: Date.now() + LOCK_MS }),
+      };
   }
 }
 
 export type SessionIntentCtx = {
   clusterScores: Record<ClusterKey, number>;
-  activeCluster: ClusterKey | null;   // null in M5a/M5b; M5c wires the auto-switch
+  activeCluster: ClusterKey | null;
+  rehydratedCluster: ClusterKey | null;
   cache: Partial<Record<ClusterKey, GeneratedPage>>;
   addSearchSignal: (text: string, weight?: number) => void;
   addBrowseSignal: (tags: string[]) => void;
+  setActiveCluster: (cluster: ClusterKey | null) => void;
 };
 
 const Ctx = createContext<SessionIntentCtx | null>(null);
@@ -165,52 +200,68 @@ export function SessionIntentProvider({ children }: { children: React.ReactNode 
     signalQueue: [],
     clusterScores: emptyScores(),
     cache: {},
+    activeCluster: null,
+    lockedUntil: 0,
   });
 
-  // Tracks clusters with a background fetch in flight — prevents double-firing.
   const generatingRef = useRef(new Set<ClusterKey>());
-  // AbortControllers for each in-flight fetch — cancelled on unmount.
   const abortControllersRef = useRef(new Map<ClusterKey, AbortController>());
+  const [rehydratedCluster, setRehydratedCluster] = useState<ClusterKey | null>(null);
 
-  // Abort all in-flight fetches on unmount.
   useEffect(() => () => {
     for (const ac of abortControllersRef.current.values()) ac.abort();
   }, []);
 
   // Rehydrate from sessionStorage on mount.
-  // Storage format: { queue: LiveSignal[], cache: Record<ClusterKey, GeneratedPage> }
-  // Backwards-compat: if value is a plain array (M5a format), treat as queue + empty cache.
+  // Storage format: { queue, cache, activeCluster, lockedUntil }
+  // Backwards-compat: M5a (array) and M5b ({ queue, cache }) formats are handled gracefully.
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw) as unknown;
-      let queue: LiveSignal[];
-      let cache: Partial<Record<ClusterKey, GeneratedPage>>;
+      let queue: LiveSignal[] = [];
+      let cache: Partial<Record<ClusterKey, GeneratedPage>> = {};
+      let activeCluster: ClusterKey | null = null;
+      let lockedUntil = 0;
+
       if (Array.isArray(parsed)) {
         queue = parsed as LiveSignal[];
-        cache = {};
       } else {
-        const obj = parsed as { queue?: LiveSignal[]; cache?: Partial<Record<ClusterKey, GeneratedPage>> };
+        const obj = parsed as {
+          queue?: LiveSignal[];
+          cache?: Partial<Record<ClusterKey, GeneratedPage>>;
+          activeCluster?: ClusterKey | null;
+          lockedUntil?: number;
+        };
         queue = obj.queue ?? [];
         cache = obj.cache ?? {};
+        activeCluster = obj.activeCluster ?? null;
+        lockedUntil = obj.lockedUntil ?? 0;
       }
-      if (queue.length > 0 || Object.keys(cache).length > 0) {
-        dispatch({ type: 'rehydrate', queue, cache });
+
+      // Guard against stale sessionStorage keys surviving a cluster rename.
+      if (activeCluster !== null && !(CLUSTER_KEYS as string[]).includes(activeCluster)) {
+        activeCluster = null;
       }
+      setRehydratedCluster(activeCluster);
+      dispatch({ type: 'rehydrate', queue, cache, activeCluster, lockedUntil });
     } catch {}
   }, []);
 
-  // Persist signal queue + page cache on every change.
+  // Persist full state on every change.
   useEffect(() => {
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ queue: state.signalQueue, cache: state.cache }));
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
+        queue: state.signalQueue,
+        cache: state.cache,
+        activeCluster: state.activeCluster,
+        lockedUntil: state.lockedUntil,
+      }));
     } catch {}
-  }, [state.signalQueue, state.cache]);
+  }, [state.signalQueue, state.cache, state.activeCluster, state.lockedUntil]);
 
-  // Background generation: when any cluster crosses GEN_THRESHOLD and isn't cached,
-  // fire /api/gen-page in the background and store the result in the cache.
-  // No visible UI change in M5b — the cached page is consumed by M5c.
+  // Background generation: fire /api/gen-page when a cluster crosses GEN_THRESHOLD.
   useEffect(() => {
     for (const cluster of CLUSTERS) {
       const { key } = cluster;
@@ -232,22 +283,40 @@ export function SessionIntentProvider({ children }: { children: React.ReactNode 
     }
   }, [state.clusterScores, state.cache]);
 
-  // Development-only: log score updates with cache status.
+  // Auto-switch: when the top cluster exceeds SWITCH_THRESHOLD and leads the current
+  // cluster by SWITCH_LEAD, switch to it. The lock raises the threshold post-switch
+  // to prevent oscillation when two clusters score close together.
+  useEffect(() => {
+    const top = topCluster(state.clusterScores);
+    if (!top || top === state.activeCluster) return;
+
+    const topScore = state.clusterScores[top];
+    const currentScore = state.activeCluster ? state.clusterScores[state.activeCluster] : 0;
+    const effectiveThreshold = Date.now() < state.lockedUntil
+      ? SWITCH_THRESHOLD + 0.2  // raised threshold during lock period
+      : SWITCH_THRESHOLD;
+
+    if (topScore >= effectiveThreshold && topScore - currentScore >= SWITCH_LEAD) {
+      dispatch({ type: 'switch_cluster', cluster: top });
+    }
+  }, [state.clusterScores, state.activeCluster, state.lockedUntil]);
+
+  // Development-only: log score + cache status per cluster.
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return;
     const top = topCluster(state.clusterScores);
     if (!top) return;
-    console.log(
-      '[intent]',
-      Object.entries(state.clusterScores)
-        .sort(([, a], [, b]) => b - a)
-        .map(([k, v]) => {
-          const cached = state.cache[k as ClusterKey] ? '✓' : generatingRef.current.has(k as ClusterKey) ? '…' : '';
-          return `${k}:${v.toFixed(2)}${cached}`;
-        })
-        .join(' '),
-    );
-  }, [state.clusterScores, state.cache]);
+    const line = Object.entries(state.clusterScores)
+      .sort(([, a], [, b]) => b - a)
+      .map(([k, v]) => {
+        const suffix = state.cache[k as ClusterKey] ? '✓'
+          : generatingRef.current.has(k as ClusterKey) ? '…' : '';
+        const active = k === state.activeCluster ? '*' : '';
+        return `${k}:${v.toFixed(2)}${suffix}${active}`;
+      })
+      .join(' ');
+    console.log('[intent]', line);
+  }, [state.clusterScores, state.cache, state.activeCluster]);
 
   const addSearchSignal = useCallback((text: string, weight = 1.0) => {
     const trimmed = text.trim();
@@ -266,13 +335,19 @@ export function SessionIntentProvider({ children }: { children: React.ReactNode 
     });
   }, []);
 
+  const setActiveCluster = useCallback((cluster: ClusterKey | null) => {
+    dispatch({ type: 'set_cluster', cluster });
+  }, []);
+
   return (
     <Ctx.Provider value={{
       clusterScores: state.clusterScores,
-      activeCluster: null,   // wired in M5c
+      activeCluster: state.activeCluster,
+      rehydratedCluster,
       cache: state.cache,
       addSearchSignal,
       addBrowseSignal,
+      setActiveCluster,
     }}>
       {children}
     </Ctx.Provider>

@@ -17,6 +17,10 @@ import { usePersona } from "@/lib/persona-context";
 import { type Persona } from "@/lib/personas";
 import { inferFromSignals } from "@/lib/signals";
 import type { EvidenceTrace } from "@/lib/signals";
+import { type ClusterKey } from "@/lib/intent-clusters";
+import { useSessionIntent } from "@/lib/session-intent";
+import { IntentBanner } from "@/components/IntentBanner";
+import { IntentTrail } from "@/components/IntentTrail";
 
 type StreamEvent =
   | { type: "block"; block: PageBlock; mode?: PageMode }
@@ -245,6 +249,32 @@ function HomeInner() {
   const abortRef = useRef<AbortController | null>(null);
   const isFirstRun = useRef(true);
 
+  const { activeCluster, cache, setActiveCluster, rehydratedCluster } = useSessionIntent();
+  const [clusterHistory, setClusterHistory] = useState<ClusterKey[]>([]);
+  const [bannerCluster, setBannerCluster] = useState<ClusterKey | null>(null);
+  const [bannerInstant, setBannerInstant] = useState(false);
+  const prevClusterRef = useRef<ClusterKey | null>(null);
+
+  useEffect(() => {
+    if (!activeCluster || activeCluster === prevClusterRef.current) return;
+    // Suppress banner when restoring from sessionStorage (not a live switch).
+    const isRehydration = activeCluster === rehydratedCluster && prevClusterRef.current === null;
+    prevClusterRef.current = activeCluster;
+    setClusterHistory(prev => {
+      const filtered = prev.filter(k => k !== activeCluster);
+      return [...filtered, activeCluster].slice(-3);
+    });
+    if (!isRehydration) {
+      setBannerCluster(activeCluster);
+      setBannerInstant(!!cache[activeCluster]);
+    }
+  }, [activeCluster, cache, rehydratedCluster]);
+
+  // Upgrade bannerInstant to true when the cache entry lands while the banner is still open.
+  useEffect(() => {
+    if (bannerCluster && cache[bannerCluster]) setBannerInstant(true);
+  }, [cache, bannerCluster]);
+
   useEffect(() => {
     if (q) return;
     if (!persona) {
@@ -391,14 +421,37 @@ function HomeInner() {
     setActive(selectedPersona, selectedEvidence);
   };
 
+  const handleClear = () => {
+    clear();
+    setActiveCluster(null);
+  };
+
+  const inClusterMode = !!activeCluster && !persona && !q;
+
   return (
     <div className="min-h-screen bg-concrete">
       <div className="max-w-8xl mx-auto px-4 py-8 space-y-8">
         {q ? (
           <SearchResults query={q} />
+        ) : inClusterMode ? (
+          <>
+            {bannerCluster && (
+              <IntentBanner
+                cluster={bannerCluster}
+                instant={bannerInstant}
+                onDismiss={() => setBannerCluster(null)}
+              />
+            )}
+            <IntentTrail history={clusterHistory} active={activeCluster} />
+            {cache[activeCluster] ? (
+              <PersonaContent page={cache[activeCluster]!} />
+            ) : (
+              <PageSkeleton />
+            )}
+          </>
         ) : (
           <>
-            <PersonaPicker activePersona={persona} onSelect={handleSelectPersona} onClear={clear} />
+            <PersonaPicker activePersona={persona} onSelect={handleSelectPersona} onClear={handleClear} />
             {persona && evidence && (
               <EvidenceBar persona={persona} evidence={evidence} fromAI={page?.fromAI ?? false} />
             )}
