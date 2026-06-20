@@ -21,6 +21,7 @@ import { type ClusterKey } from "@/lib/intent-clusters";
 import { useSessionIntent } from "@/lib/session-intent";
 import { IntentBanner } from "@/components/IntentBanner";
 import { IntentTrail } from "@/components/IntentTrail";
+import { IntentDebugPanel } from "@/components/IntentDebugPanel";
 
 type StreamEvent =
   | { type: "block"; block: PageBlock; mode?: PageMode }
@@ -249,7 +250,7 @@ function HomeInner() {
   const abortRef = useRef<AbortController | null>(null);
   const isFirstRun = useRef(true);
 
-  const { activeCluster, cache, setActiveCluster, rehydratedCluster } = useSessionIntent();
+  const { activeCluster, cache, setActiveCluster, clearSignals, rehydratedCluster } = useSessionIntent();
   const [clusterHistory, setClusterHistory] = useState<ClusterKey[]>([]);
   const [bannerCluster, setBannerCluster] = useState<ClusterKey | null>(null);
   const [bannerInstant, setBannerInstant] = useState(false);
@@ -419,6 +420,8 @@ function HomeInner() {
   const handleSelectPersona = (selectedPersona: Persona) => {
     const { evidence: selectedEvidence } = inferFromSignals(selectedPersona.signals);
     setActive(selectedPersona, selectedEvidence);
+    setActiveCluster(null);
+    clearSignals();
   };
 
   const handleClear = () => {
@@ -426,7 +429,9 @@ function HomeInner() {
     setActiveCluster(null);
   };
 
-  const inClusterMode = !!activeCluster && !persona && !q;
+  // Live signals take priority over any persona — the spec intention.
+  // Explicit persona selection calls setActiveCluster(null) to exit cluster mode.
+  const inClusterMode = !!activeCluster && !q;
 
   return (
     <div className="min-h-screen bg-concrete">
@@ -435,6 +440,7 @@ function HomeInner() {
           <SearchResults query={q} />
         ) : inClusterMode ? (
           <>
+            <PersonaPicker activePersona={persona} onSelect={handleSelectPersona} onClear={handleClear} />
             {bannerCluster && (
               <IntentBanner
                 cluster={bannerCluster}
@@ -465,6 +471,8 @@ function HomeInner() {
           BuildRight Adaptive Storefront · 40 products · repair, gift, and appliance-buying layouts via AI tool calls
         </p>
       </footer>
+
+      <IntentDebugPanel />
     </div>
   );
 }

@@ -25,7 +25,7 @@ const STORAGE_KEY = 'buildright_intent_v1';
 const QUEUE_MAX = 20;
 const SIGNAL_TTL_MS = 180_000;   // 3 minutes
 const GEN_THRESHOLD = 0.3;       // score at which background generation fires
-const SWITCH_THRESHOLD = 0.4;    // score at which page auto-switches
+const SWITCH_THRESHOLD = 0.6;    // score at which page auto-switches
 const SWITCH_LEAD = 0.1;         // challenger must lead current cluster by this margin
 const LOCK_MS = 60_000;          // after a switch, raise threshold for this long
 
@@ -55,7 +55,7 @@ function computeScores(queue: LiveSignal[]): Record<ClusterKey, number> {
         ? scoreTextAgainstClusters(signal.value)
         : scoreTagsAgainstClusters(signal.tags);
     for (const key of CLUSTER_KEYS) {
-      scores[key] = Math.min(1.0, scores[key] + incoming[key] * signal.weight * recency);
+      scores[key] = scores[key] + incoming[key] * signal.weight * recency;
     }
   }
   return scores;
@@ -145,6 +145,7 @@ type Action =
   | { type: 'cache_page'; cluster: ClusterKey; page: GeneratedPage }
   | { type: 'switch_cluster'; cluster: ClusterKey }
   | { type: 'set_cluster'; cluster: ClusterKey | null }
+  | { type: 'clear_signals' }
   | { type: 'tick' };
 
 function reducer(state: State, action: Action): State {
@@ -181,6 +182,8 @@ function reducer(state: State, action: Action): State {
         // Reset to 0 when clearing to null so re-engagement happens at normal threshold.
         lockedUntil: action.cluster !== null ? Date.now() + LOCK_MS : 0,
       };
+    case 'clear_signals':
+      return { ...state, signalQueue: [], clusterScores: emptyScores() };
     case 'tick':
       return state;
   }
@@ -191,9 +194,11 @@ export type SessionIntentCtx = {
   activeCluster: ClusterKey | null;
   rehydratedCluster: ClusterKey | null;
   cache: Partial<Record<ClusterKey, GeneratedPage>>;
+  signalQueue: LiveSignal[];
   addSearchSignal: (text: string, weight?: number) => void;
   addBrowseSignal: (tags: string[]) => void;
   setActiveCluster: (cluster: ClusterKey | null) => void;
+  clearSignals: () => void;
 };
 
 const Ctx = createContext<SessionIntentCtx | null>(null);
@@ -359,15 +364,22 @@ export function SessionIntentProvider({ children }: { children: React.ReactNode 
     dispatch({ type: 'set_cluster', cluster });
   }, []);
 
+  const clearSignals = useCallback(() => {
+    failedRef.current.clear();
+    dispatch({ type: 'clear_signals' });
+  }, []);
+
   return (
     <Ctx.Provider value={{
       clusterScores: state.clusterScores,
       activeCluster: state.activeCluster,
       rehydratedCluster,
       cache: state.cache,
+      signalQueue: state.signalQueue,
       addSearchSignal,
       addBrowseSignal,
       setActiveCluster,
+      clearSignals,
     }}>
       {children}
     </Ctx.Provider>
