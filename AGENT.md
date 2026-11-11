@@ -30,14 +30,15 @@ renders truth and never invents products. Everything interesting is in the layer
 ## 2. Non-negotiable principles (do not violate these)
 
 1. **Grounding is absolute.** The model may select product ids; it may never invent
-   a product, price, or stock state. Any id the model returns that isn't in the
-   catalog is *dropped at bind time* (`lib/schema.ts → ground()`). If a block ends
-   up empty, the block is dropped. The page renders truth or it doesn't render.
+   a product, price, or stock state. Streamed tool calls are grounded in
+   `lib/render-tools.ts`; full preset/spec paths can use `lib/schema.ts → ground()`.
+   Unknown ids are removed and a product block is dropped when too few valid ids remain.
 2. **Finite block vocabulary.** The model picks from a fixed registry of block
    types — never arbitrary HTML/JSX. Adding a block type means adding it to the Zod
    schema AND the renderer switch AND the prompt. All three, or it breaks.
-3. **Never crash the page.** Every failure path (schema invalid, network down, no
-   API key, parse error) falls back to a grounded cached spec. See the render route.
+3. **Never crash the page.** Missing API keys and model/stream errors fall back to a
+   grounded preset. Invalid individual tool calls are dropped; the explicit persona
+   path applies a final completeness fallback. See the render route and `app/page.tsx`.
 4. **The intent is legible.** Signal evidence and the active intent cluster are
    always visible to the user. This is the product's differentiator vs. a black-box
    recommender. Keep it honest and visible. Do not hide inference.
@@ -54,7 +55,7 @@ those constraints *are* the product.
 | File | Layer | Responsibility |
 |---|---|---|
 | `lib/catalog.ts` | source of truth | 40 products. The ONLY place products/prices/stock exist. `tags` are the join key to signals. |
-| `lib/schema.ts` | contract + grounding | Zod `PageSpecSchema`; `ground()` drops invented ids and empty blocks. |
+| `lib/schema.ts` | full-spec contract | Zod `PageSpecSchema` and `ground()` for preset/spec paths. Streamed tool calls use `lib/render-tools.ts`. |
 | `lib/fallback.ts` | safety net + scenarios | 7 hand-verified PRESETS (repair, appliance, gift, outdoor, default, starter, budget). Used as no-key fallback and demo content. |
 
 ### Added in signal-driven personas phase
@@ -175,20 +176,19 @@ switched.** That's the money shot. Everything else is setup for that moment.
 
 ### 6.2 Intent clusters (replaces and extends the static persona vocabulary)
 
-Six clusters with intentionally distinct visual identities. If two clusters produce
+Five live clusters with intentionally distinct visual identities. If two clusters produce
 visually similar pages, the demo loses its point.
 
 | Cluster key | Signal keywords / tags | Page feel |
 |---|---|---|
 | `repair` | faucet, leak, wrench, cartridge, drain, clog, fix, plumbing | Utilitarian. Dark hero: "Let's fix it." Guide first, then exact parts. |
 | `gift` | gift, Father's Day, birthday, present, ideas, dad, popular | Warm orange-gradient hero: "A gift he'll reach for." Gift collection, then comparison. |
-| `appliance` | dishwasher, appliance, quiet, stainless, third-rack, install, kitchen | High-consideration. Hero: "Pick the dishwasher." Comparison first, then appliances/accessories and checklist. |
 | `outdoor` | patio, garden, grill, summer, porch, mulch, deck, lawn, seasonal | Natural. Hero: "Build the backyard." Seasonal product grid. |
 | `project` | drill, build, cut, install, workshop, plywood, saw, lumber, power-tool | Bold. Hero: "What are you building?" Power tools and accessories first. |
 | `starter` | first home, moved, beginner, basics, apartment, essentials, new homeowner | Friendly. Hero: "Start with what you'll actually use." Essential 5. |
 
-**Note:** `appliance` and `project` modes already exist in the current fallback and
-streaming generation path. Any new cluster must update `lib/fallback.ts`,
+**Note:** `appliance` exists as a static persona and generation mode, but is not a live
+drift cluster. `project` is both a live cluster and generation mode. Any new cluster must update `lib/fallback.ts`,
 `lib/schema.ts`, `lib/render-tools.ts`, and `app/api/gen-page/route.ts` together.
 
 ---
@@ -196,7 +196,7 @@ streaming generation path. Any new cluster must update `lib/fallback.ts`,
 ### 6.3 Threshold model
 
 ```
-0.0 ──────── 0.3 ──────── 0.4 ─────────── 1.0
+0.0 ──────── 0.3 ───────────── 0.6 ─────── 1.0
              |            |
              generate     switch
              (background) (UI + banner)
@@ -205,7 +205,7 @@ streaming generation path. Any new cluster must update `lib/fallback.ts`,
 **At score ≥ 0.3:** Fire `generatePage()` for that cluster in the background. User sees
 nothing. Store result in `IntentContextCache[cluster]`.
 
-**At score ≥ 0.4 AND leading the current rendered cluster by ≥ 0.1:** Swap the page.
+**At score ≥ 0.6 AND leading the current rendered cluster by ≥ 0.1:** Swap the page.
 Show the intent banner. If the cache already has the page → instant (no skeleton).
 If generation is still in flight → show skeleton until it resolves.
 
@@ -215,7 +215,7 @@ close together. Without this the demo looks like a bug.
 
 **Intent lock after switch:** Once the UI has committed to a cluster and the user
 continues interacting with that page, raise the competing cluster's switch threshold to
-0.6 (instead of 0.4) for 60 seconds. This prevents the system from switching back just
+0.8 (instead of 0.6) for 60 seconds. This prevents the system from switching back just
 because the user clicked one product from a different category while on the switched page.
 
 ---
@@ -288,13 +288,13 @@ specific intents deterministically. When a user picks a persona from the dropdow
 2. Also inject that persona's signals into `SessionIntentStore` as live signals with
    `capturedAt: Date.now()` and `liveRecency() = 1.0`.
 3. The cluster scorer immediately fires and should produce scores consistent with the
-   persona's intent (repair persona → repair cluster dominant).
+persona's intent when its tags map to a live cluster (repair persona → repair cluster dominant).
 4. Live browsing signals then accumulate on top — the persona is the starting state,
    not a lock.
 
 If the live cluster diverges from the persona-set cluster (user selected "repair" persona
 but then searched "Father's Day gift" three times), the live cluster wins when it crosses
-0.4 + 0.1 margin.
+0.6 with a 0.1 lead.
 
 ---
 
@@ -447,9 +447,9 @@ The recording proves one technically hard thing per scene:
 |---|---|---|
 | 0:00 | Open site, default home | Cold-start default works |
 | 0:10 | Type "faucet repair" in search | Signal captured (repair 0.3 → background generation fires, invisible) |
-| 0:20 | Click Plumbing in category nav | Repair crosses 0.4 → page switches with banner "Optimized for home repair" |
+| 0:20 | Continue repair browsing/search | Repair crosses 0.6 → page switches with banner "Optimized for home repair" |
 | 0:35 | Type "Father's Day gift ideas" | Gift at 0.3 → generation fires in background |
-| 0:45 | Click on a drill product | Gift crosses 0.4 → **INSTANT** switch, no skeleton. Banner: "Optimized for gift buying" + "(instant)" |
+| 0:45 | Continue gift browsing/search | Gift crosses 0.6 → **INSTANT** switch, no skeleton. Banner: "Optimized for gift buying" + "(instant)" |
 | 0:55 | Click "repair" in the trail | **INSTANT** switch back. Repair page was still cached. |
 | 1:05 | Title card | "Intent inferred in JS. Layout generated by OpenAI. Pages pre-built before you switch." |
 
@@ -457,7 +457,7 @@ The money shot is 0:45 — instant switch with no loading. Everything before is 
 The 0:55 instant switch-back is the exclamation point: *both* contexts were alive.
 
 **Known demo constraint:** The instant switch only works if the pre-render at 0.3
-completed before 0.4 fires. At normal human search speed (one search every ~10 seconds)
+completed before 0.6 fires. At normal human search speed (one search every ~10 seconds)
 this is comfortable — generation takes 1-2 seconds. At demo-clicking speed it won't be
 instant. Script the recording at a natural pace.
 

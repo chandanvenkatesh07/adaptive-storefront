@@ -1,9 +1,9 @@
 # BuildRight Adaptive Storefront — Milestone Review
 
 **Overall objective:** One 40-item home-improvement catalog. The page layout, content
-blocks, navigation order, and product recommendations all adapt per shopper based on
-inferred intent. No per-user server state; the page is fully statically generated and
-persona reconfiguration runs on the client.
+blocks, navigation order, and product recommendations adapt per shopper based on
+inferred intent. Catalog product pages are statically generated; home-page composition
+uses a dynamic generation route plus browser-session state and caches.
 
 ---
 
@@ -41,7 +41,7 @@ persona reconfiguration runs on the client.
   - `renderGiftCollection(title, note, productIds)`
   - `renderComparison(title, productIds)`
 - **Grounding** — all model-returned product IDs are filtered through `byId()`. Invented IDs are dropped silently. If a block ends up empty, it is dropped.
-- **Streaming block validation** — each tool call is parsed through Zod and grounded before the client renders it. Incomplete pages fall back to deterministic presets.
+- **Streaming block validation** — each tool call is parsed through Zod and grounded before the client renders it. The explicit persona path runs a final completeness check and substitutes a deterministic preset when required blocks are missing.
 - **No API key path** — streams the matching preset with `fromAI: false`. Page still works.
 - **Section components** (`components/sections/`) — `HeroBanner`, `GuideSection`, `ProductGridSection`, `ComparisonSection`, `PageSkeleton` (shown while waiting for the first streamed block).
 - **EvidenceBar AI badge** — shows "AI" chip when `fromAI` is true.
@@ -112,13 +112,22 @@ persona reconfiguration runs on the client.
 
 ---
 
-## What is NOT built yet (M5 scope — do not review)
+## Milestone 5 — Live Intent Tracking + Background Generation
 
-- Live intent tracking (session-level signal capture, cluster scoring, threshold-based auto-switch).
-- Background pre-rendering at score ≥ 0.3 / instant swap at ≥ 0.4.
-- `IntentBanner`, `IntentTrail`, `ProductPageSignal` components.
-- `project` cluster + matching PRESET.
-- No real checkout, auth, or payment integration (non-goal per AGENT.md).
+### What was built
+
+- `lib/intent-clusters.ts` defines five deterministic live clusters: repair, gift, outdoor, project, and starter. Appliance remains a persona/generation mode, not a live cluster.
+- `lib/session-intent.tsx` maintains a 20-signal rolling queue, three-minute decay, browser-session persistence, per-cluster background generation, and page caches.
+- A cluster begins background generation at score ≥ 0.3. The UI switches at score ≥ 0.6 when the challenger leads by at least 0.1. A 60-second lock raises the effective threshold to 0.8.
+- `IntentBanner`, `IntentTrail`, `IntentDebugPanel`, and `ProductPageSignal` expose switches, history, development evidence, and product-view signals.
+- Search, category navigation, and product views add deterministic signals; the LLM composes pages but does not classify the live intent.
+
+### Current limitations
+
+- The background cluster fetch accepts any non-empty block list and does not run the explicit persona path's complete-page check.
+- A failed cluster is suppressed until reload. If the active cluster switched before its page cached, the UI can remain on the skeleton.
+- No automated evaluation currently measures switch correctness, block/schema validity, product grounding, latency, or fallback success.
+- There is no authentication, rate limiting, real checkout, payment, or commerce backend.
 
 ---
 
@@ -138,4 +147,4 @@ Route (app)                              Size     First Load JS
     └ [+37 more paths]
 ```
 
-Zero errors, zero warnings. `/cart` is static (○). All catalog product pages remain SSG (●).
+The route table above is a captured example, not a permanent performance result. Re-run `npm run build` for the current commit. `/cart` is static (○), the generation and MCP endpoints are dynamic (ƒ), and catalog product pages remain SSG (●).
