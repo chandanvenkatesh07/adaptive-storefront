@@ -1,67 +1,131 @@
 # Adaptive Storefront
 
-A demo of **intent-driven, server-driven UI** for commerce. One product catalog;
-the page assembles different blocks, in a different order, depending on what the
-shopper came to do. The model **selects and orders blocks** from a fixed registry
-and binds them to **real catalog products** — it can never invent a product, price,
-or layout markup.
+Adaptive Storefront is a working commerce UI experiment in which inferred shopper intent changes the page composition. The model can select and order blocks from a fixed registry, but React owns rendering and the local catalog owns product names, prices, availability, and IDs.
 
-Three flagship shoppers, same expanded catalog:
-- *"My kitchen faucet is leaking and I've never fixed one"* → convergent repair layout
-- *"I need a quiet stainless dishwasher and the install parts"* → high-consideration appliance-buying layout
-- *"Father's Day gift for my dad who loves DIY"* → divergent gift layout
+The architecture is intentionally hybrid: deterministic signal scoring decides when an in-session intent has changed; an LLM can compose a page through typed tools; catalog binding and fallback logic constrain what reaches the UI.
 
-## What I actually built (the Option A seam)
+## What is implemented
 
-The model is the *least* of it. The engineering is the layers around it:
+- Five model-callable rendering tools: hero, product grid, guide, gift collection, and comparison.
+- Zod validation on every streamed tool call.
+- Product-ID grounding against a 40-item catalog before a product block is emitted.
+- A finite React renderer switch—model output never becomes HTML or JSX.
+- NDJSON block streaming from the Next.js route to the browser.
+- A stateless MCP endpoint with the catalog resource, a composition prompt, and the same five render tools.
+- Deterministic fallback presets for missing API keys and failed model calls.
+- Session-scoped caches for persona pages and live intent-cluster pages.
+- Rule-based in-session intent scoring, background page generation, threshold-based switching, hysteresis, and a 60-second switch lock.
+- Static persona fixtures for repeatable repair, appliance, gift, outdoor, cold-start, and budget demonstrations.
+- Static catalog product pages, client-side related-product ranking, and a demo cart.
 
-| File | Layer | What it owns |
-|---|---|---|
-| `lib/schema.ts` | contract + grounding | Zod page-spec; **drops any product id the model invents**, drops empty blocks |
-| `app/page.tsx` | render seam | the `switch` over a finite block registry → real React |
-| `app/api/gen-page/route.ts` | orchestration | streaming model tool calls, **graceful fallback** on any failure |
-| `app/api/mcp/route.ts` | agent boundary | exposes the catalog and rendering vocabulary through MCP |
-| `components/sections/*` | UI blocks | hero, product grid, guide/checklist, gift collection, comparison |
-| `lib/catalog.ts` | source of truth | the only place products, prices, and stock exist |
+## Architecture and source map
+
+| File | Responsibility |
+|---|---|
+| `lib/catalog.ts` | Source of truth for product IDs, names, prices, stock state, and tags. |
+| `lib/render-tools.ts` | Tool schemas, per-call validation, and product-ID grounding used by the generation route and MCP endpoint. |
+| `app/api/gen-page/route.ts` | Calls the selected OpenAI model, streams validated blocks as NDJSON, and emits deterministic fallbacks on model failure. |
+| `app/api/mcp/route.ts` | Exposes the catalog, composition prompt, and five grounded render tools over stateless MCP HTTP. |
+| `app/page.tsx` | Parses the stream, performs persona-page completeness checks, caches results, and renders the finite block vocabulary. |
+| `lib/intent-clusters.ts` | Deterministic keyword/tag scoring for five live intent clusters. |
+| `lib/session-intent.tsx` | Signal decay, background generation, cluster cache, auto-switch thresholds, lock, and `sessionStorage` persistence. |
+| `lib/fallback.ts` | Hand-authored, catalog-grounded page specifications used when model generation is unavailable. |
+| `lib/schema.ts` | Full `PageSpec` contract and grounding helper used by preset/spec paths; streamed calls use the narrower schemas in `lib/render-tools.ts`. |
+
+## Generation path
+
+1. The browser posts an intent description and fallback-preset key to `/api/gen-page`.
+2. With an API key, AI SDK `streamText` requires calls to one of five typed tools. The prompt includes a catalog summary and layout rules.
+3. `blockFromToolCall()` runs the matching Zod schema. Invalid calls are ignored.
+4. Product-bearing blocks filter IDs through `byId()`. Product grids require at least one real product; gift and comparison blocks require at least two.
+5. Valid blocks stream to the browser as newline-delimited JSON and are rendered through a fixed TypeScript switch.
+6. The explicit persona path checks that the final block set contains the required hero and product content for its mode; an incomplete page is replaced by a deterministic preset.
+
+The background live-cluster path uses the same validated stream and grounding logic, but currently accepts any non-empty block set rather than running the persona path's full-page completeness check.
+
+## Live intent drift and caching
+
+Live adaptation is deterministic, not an LLM classification step:
+
+- Search and browse signals are scored against five clusters: `repair`, `gift`, `outdoor`, `project`, and `starter`.
+- Signals use a rolling 20-item queue and decay in three buckets before expiring after three minutes.
+- At a score of 0.3, the app starts background generation for that cluster if it is not already cached or in flight.
+- At a score of 0.6, with at least a 0.1 lead over the active cluster, the page switches.
+- For 60 seconds after a switch, the effective competing threshold is 0.8 to reduce oscillation.
+- Signal state, generated pages, the active cluster, and the lock deadline are stored in `sessionStorage` for the browser session.
+
+The appliance layout is implemented as a static persona and generation mode, but it is not one of the five live drift clusters.
+
+Caching is browser-session caching, not a shared server or CDN response cache. A failed cluster generation is suppressed until reload to avoid retry storms.
+
+## MCP surface
+
+`/api/mcp` creates a new stateless MCP server and transport per request. It exposes:
+
+- resource: `buildright://catalog`
+- prompt: `compose-page`
+- tools: `renderHero`, `renderProducts`, `renderGuide`, `renderGiftCollection`, and `renderComparison`
+
+The product tools validate their arguments and reject calls that do not retain enough real catalog IDs after grounding. The endpoint does not currently authenticate or authorize clients.
+
+## Failure and fallback behavior
+
+| Condition | Current behavior |
+|---|---|
+| No `OPENAI_API_KEY` | The route streams the requested deterministic preset with `fromAI: false`. |
+| Model or stream exception | The route emits a fallback event containing the deterministic preset. |
+| Invalid tool arguments | The tool call is dropped and no block is emitted. |
+| Unknown product IDs | IDs are removed; the block is dropped if too few valid IDs remain. |
+| Incomplete explicit-persona page | A client completeness check replaces it with the matching preset. |
+| Incomplete live-cluster page | Any non-empty block list can enter the cluster cache; full-page completeness is not checked. |
+| Failed live-cluster generation | The cluster is marked failed until reload; if a switch occurred first, the UI can remain on its skeleton. |
+| User changes persona request | The prior browser fetch is aborted. |
 
 ## Run locally
 
 ```bash
-npm install
-npm run dev      # http://localhost:3000
+npm ci
+npm run dev
 ```
 
-Works with **no API key** — it serves grounded, cached specs. To enable live
-generation, copy `.env.example` to `.env.local` and add `OPENAI_API_KEY`.
+Open `http://localhost:3000`. The demo works without an API key by streaming grounded presets.
 
-## Deploy to Vercel
+To enable live generation:
 
-1. Push this folder to a new GitHub repo.
-2. On vercel.com → **Add New → Project** → import the repo. Framework auto-detects as Next.js.
-3. (Optional) Project → **Settings → Environment Variables** → add `OPENAI_API_KEY`
-   if you want the live-generation path. Without it, the public demo still works on
-   cached specs at zero cost.
-   You can also set `OPENAI_MODEL`; it defaults to `gpt-5.4-mini` for lower-cost live demos.
-4. **Deploy.** You get a public URL.
+```bash
+cp .env.example .env.local
+# set OPENAI_API_KEY; OPENAI_MODEL is optional
+npm run dev
+```
 
-Alternatively, with the Vercel CLI: `npx vercel` from this folder.
+Create a production build with:
 
-### Cost note for a public link
-Cached specs cost nothing. The live path costs model tokens **per click**, so if you
-set a key on a public URL, every visitor's "Generate layout" spends money. Either
-leave the key off (cached is convincing on its own) or keep the key for your own
-recorded walkthrough and ship the public link keyless.
+```bash
+npm run build
+```
 
-## What's deliberately NOT here (the honest v1 boundary)
+## Cost controls present in the demo
 
-These are named non-goals, not omissions: per-user history, real inventory APIs,
-caching by intent cluster, the live washing-machine→gift *switch detector*, A/B eval,
-and a policy gate. Each maps to a layer in the design — they're the "what
-productionizing adds" story, not the demo.
+- No-key operation bypasses model calls entirely.
+- Session caches avoid repeat generation for the same persona or live cluster.
+- Background generation starts only after the 0.3 score threshold.
+- Input is truncated to 800 characters and output is capped at 1,200 tokens.
+- The default model can be overridden through `OPENAI_MODEL`.
 
-### Optional v2 extension
+The app does not record token usage or model cost, so it cannot yet make a measured cost-per-page or cost-per-success claim.
 
-Appliance buying currently reuses the existing block vocabulary: hero, comparison,
-products, and guide/checklist. A future v2 could add a first-class
-`renderBuyingGuide` or `renderChecklist` tool, but that should update the schema,
-renderer, AI tools, MCP tools, fallback presets, docs, and tests together.
+## Honest boundaries
+
+- The catalog, stock state, personas, and fallbacks are demo fixtures, not connected commerce systems.
+- The generation route and MCP endpoint have no authentication, authorization, tenant isolation, rate limiting, abuse controls, or retained audit trail.
+- Streamed blocks are validated individually, but the server does not enforce a unique hero, global tool order, or complete-page schema. The explicit persona client supplies a separate completeness check.
+- Live intent detection is deterministic keyword/tag matching, not a trained intent model, and there is no implemented appliance live-drift cluster.
+- There is no automated test or evaluation suite for tool-selection accuracy, schema-valid rate, grounding accuracy, false switches, latency, or fallback success.
+- There is no request tracing, model latency history, token telemetry, or cost telemetry.
+- Session caches are browser-local and do not provide server durability or cross-device identity.
+- Checkout, payment, real inventory, account history, experimentation, and policy approval are not implemented.
+- The repository demonstrates an architecture and working prototype; it is not presented as production-ready.
+
+## Deployment note
+
+The repository can be deployed as a standard Next.js application. A public deployment with an API key should add authentication, rate limits, spend limits, and monitoring first. The repository's previous Vercel URL is no longer an active deployment, so no public demo URL is claimed here.
